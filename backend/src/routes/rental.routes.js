@@ -6,8 +6,13 @@ const {
   requestRental,
   approveRental,
   activateRental,
-  returnRental
+  returnRental,
+  getMyRentals,
+  getOwnerRentals 
 } = require("../controllers/rental.controller");
+
+router.get("/my-rentals", auth, getMyRentals);
+router.get("/owner-rentals", auth, getOwnerRentals);
 
 router.post("/request", auth, requestRental);
 router.patch("/approve/:id", auth, approveRental);

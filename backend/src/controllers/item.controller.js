@@ -30,6 +30,16 @@ exports.getAllItems = async (req, res) => {
   res.json(items);
 };
 
+// GET MY ITEMS
+exports.getMyItems = async (req, res) => {
+  try {
+    const items = await Item.find({ owner: req.user.id });
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 /**
  * UPDATE ITEM
  * Only owner can update
@@ -108,3 +118,5 @@ exports.deleteItem = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+

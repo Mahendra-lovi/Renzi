@@ -176,3 +176,31 @@ exports.returnRental = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+// GET RENTALS OF LOGGED-IN USER (Renter side)
+exports.getMyRentals = async (req, res) => {
+  try {
+    const rentals = await Rental.find({ renter: req.user.id })
+      .populate("item", "title images pricePerDay")
+      .sort({ createdAt: -1 });
+
+    res.json(rentals);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// GET RENTALS FOR OWNER (requests on my items)
+exports.getOwnerRentals = async (req, res) => {
+  try {
+    const rentals = await Rental.find({ owner: req.user.id })
+      .populate("item", "title images pricePerDay")
+      .populate("renter", "email")
+      .sort({ createdAt: -1 });
+
+    res.json(rentals);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

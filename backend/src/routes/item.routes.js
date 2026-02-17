@@ -6,11 +6,13 @@ const {
   createItem,
   getAllItems,
   updateItem,
-  deleteItem
+  deleteItem,
+  getMyItems
 } = require("../controllers/item.controller");
 
 router.post("/", auth, createItem);
 router.get("/", getAllItems);
+router.get("/my-items", auth, getMyItems);
 
 // 🔒 protected ownership routes
 router.patch("/:id", auth, updateItem);
