@@ -64,7 +64,8 @@ const styles = {
   overlay: {
     position: "fixed",
     inset: 0,
-    background: "rgba(17,24,39,0.28)",
+    background: "rgba(17,24,39,0.26)",
+    backdropFilter: "blur(5px)",
     zIndex: 999,
   },
 
@@ -74,14 +75,16 @@ const styles = {
     left: 0,
     width: 290,
     height: "100dvh",
-    background: "#f9fafb",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.84) 0%, rgba(243,244,246,0.84) 100%)",
     color: "#111827",
     padding: "16px 16px 24px",
     display: "flex",
     flexDirection: "column",
-    borderRight: "1px solid #d1d5db",
-    boxShadow: "8px 0 20px rgba(0,0,0,0.08)",
+    borderRight: "1px solid rgba(209, 213, 219, 0.72)",
+    boxShadow: "14px 0 30px rgba(0,0,0,0.16)",
+    backdropFilter: "blur(18px) saturate(140%)",
     zIndex: 1000,
+    transition: "transform 260ms ease",
   },
 
   sidebarHeader: {
@@ -93,13 +96,14 @@ const styles = {
 
   sidebarTitle: {
     margin: 0,
-    fontSize: 16,
+    fontSize: 17,
     color: "#111827",
+    fontWeight: 800,
   },
 
   closeBtn: {
-    background: "#e5e7eb",
-    border: "1px solid #d1d5db",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(243,244,246,0.94) 100%)",
+    border: "1px solid rgba(203,213,225,0.85)",
     color: "#111827",
     fontSize: 13,
     padding: "6px 10px",
@@ -123,22 +127,24 @@ const styles = {
 
   link: {
     textAlign: "left",
-    border: "1px solid #d1d5db",
-    background: "#f3f4f6",
+    border: "1px solid rgba(209,213,219,0.85)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(243,244,246,0.92) 100%)",
     color: "#1f2937",
     borderRadius: 10,
-    padding: "10px 12px",
+    padding: "11px 12px",
     cursor: "pointer",
     fontSize: 15,
+    fontWeight: 600,
   },
 
   logoutBtn: {
     width: "100%",
-    background: "#991b1b",
+    background: "linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%)",
     border: "none",
     padding: 12,
     color: "#fff",
-    borderRadius: 6,
+    borderRadius: 10,
     cursor: "pointer",
+    fontWeight: 700,
   },
 };

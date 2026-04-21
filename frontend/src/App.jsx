@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
 import Home from "./pages/Home";
+import MapView from "./pages/MapView";
 import ItemDetails from "./pages/ItemDetails";
 import AddItem from "./pages/AddItem";
 import MyListings from "./pages/MyListings";
@@ -50,6 +51,7 @@ function App() {
           }
         >
           <Route index element={<Home />} />
+          <Route path="map" element={<MapView />} />
           <Route path="profile" element={<Profile />} />
           <Route path="items/:id" element={<ItemDetails />} />
           <Route path="add-item" element={<AddItem />} />

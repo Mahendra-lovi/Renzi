@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../services/api";
 
 function AdminDashboard() {
@@ -9,7 +9,7 @@ function AdminDashboard() {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const [activeTab, setActiveTab] = useState("users");
+  const [activeTab, setActiveTab] = useState("feedbacks");
   const [usersQuery, setUsersQuery] = useState("");
   const [itemsQuery, setItemsQuery] = useState("");
   const [rentalsQuery, setRentalsQuery] = useState("");
@@ -26,7 +26,7 @@ function AdminDashboard() {
           api.get("/admin/users", { params: { page: 1, limit: 100 } }),
           api.get("/admin/items", { params: { page: 1, limit: 100 } }),
           api.get("/admin/rentals", { params: { page: 1, limit: 100 } }),
-          api.get("/admin/cases", { params: { page: 1, limit: 100 } })
+          api.get("/admin/cases", { params: { page: 1, limit: 100 } }),
         ]);
 
         setOverview(overviewRes.data);
@@ -48,12 +48,7 @@ function AdminDashboard() {
     try {
       setMessage("");
       await api.patch(`/admin/approve/${id}`);
-
-      setUsers(prev =>
-        prev.map(u =>
-          u._id === id ? { ...u, verified: true } : u
-        )
-      );
+      setUsers((prev) => prev.map((u) => (u._id === id ? { ...u, verified: true } : u)));
     } catch (err) {
       setMessage(err.response?.data?.message || "Failed to verify user");
     }
@@ -63,12 +58,7 @@ function AdminDashboard() {
     try {
       setMessage("");
       const res = await api.patch(`/admin/block/${id}`);
-
-      setUsers(prev =>
-        prev.map(u =>
-          u._id === id ? { ...u, blocked: res.data.blocked } : u
-        )
-      );
+      setUsers((prev) => prev.map((u) => (u._id === id ? { ...u, blocked: res.data.blocked } : u)));
     } catch (err) {
       setMessage(err.response?.data?.message || "Failed to update user block status");
     }
@@ -89,9 +79,7 @@ function AdminDashboard() {
     try {
       setMessage("");
       const res = await api.patch(`/admin/rentals/${id}/resolve-dispute`, { outcome });
-      setRentals((prev) =>
-        prev.map((r) => (r._id === id ? { ...r, ...res.data.rental } : r))
-      );
+      setRentals((prev) => prev.map((r) => (r._id === id ? { ...r, ...res.data.rental } : r)));
     } catch (err) {
       setMessage(err.response?.data?.message || "Failed to resolve dispute");
     }
@@ -101,11 +89,7 @@ function AdminDashboard() {
     try {
       setMessage("");
       const res = await api.patch(`/admin/cases/${id}/status`, { status });
-      setCases((prev) =>
-        prev.map((caseItem) =>
-          caseItem._id === id ? { ...caseItem, ...res.data.caseFile } : caseItem
-        )
-      );
+      setCases((prev) => prev.map((caseItem) => (caseItem._id === id ? { ...caseItem, ...res.data.caseFile } : caseItem)));
     } catch (err) {
       setMessage(err.response?.data?.message || "Failed to update case status");
     }
@@ -118,29 +102,19 @@ function AdminDashboard() {
     const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
     const currentPage = Math.min(Math.max(page, 1), totalPages);
     const start = (currentPage - 1) * PAGE_SIZE;
-    return {
-      data: list.slice(start, start + PAGE_SIZE),
-      totalPages,
-      currentPage,
-    };
+    return { data: list.slice(start, start + PAGE_SIZE), totalPages, currentPage };
   };
 
   const usersFiltered = users.filter((u) => {
     const q = usersQuery.trim().toLowerCase();
     if (!q) return true;
-    return (
-      u.name?.toLowerCase().includes(q) ||
-      u.email?.toLowerCase().includes(q)
-    );
+    return u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q);
   });
 
   const itemsFiltered = items.filter((item) => {
     const q = itemsQuery.trim().toLowerCase();
     if (!q) return true;
-    return (
-      item.title?.toLowerCase().includes(q) ||
-      item.owner?.email?.toLowerCase().includes(q)
-    );
+    return item.title?.toLowerCase().includes(q) || item.owner?.email?.toLowerCase().includes(q);
   });
 
   const rentalsFiltered = rentals.filter((rental) => {
@@ -158,6 +132,24 @@ function AdminDashboard() {
   const itemsPageData = paginate(itemsFiltered, itemsPage);
   const rentalsPageData = paginate(rentalsFiltered, rentalsPage);
 
+  const feedbackCards = useMemo(() => ([
+    { id: 1, user: "Rajesh Kumar", rating: 4.8, feedback: "Great rental experience, items in perfect condition.", date: "2 days ago" },
+    { id: 2, user: "Priya Singh", rating: 4.5, feedback: "Good service, fast delivery and pickup.", date: "5 days ago" },
+    { id: 3, user: "Amit Patel", rating: 4.9, feedback: "Excellent platform, very professional handling.", date: "1 week ago" },
+    { id: 4, user: "Neha Gupta", rating: 4.2, feedback: "Good experience overall, minor delay in delivery.", date: "10 days ago" },
+    { id: 5, user: "Vikram Singh", rating: 4.7, feedback: "Reliable service, would use again.", date: "2 weeks ago" },
+  ]), []);
+
+  const statCards = [
+    { key: "users", title: "Total Users", value: overview?.totalUsers ?? 0, hint: "Active Marketplace" },
+    { key: "items", title: "Total Items", value: overview?.totalItems ?? 0, hint: "Available to Rent" },
+    { key: "rentals", title: "Total Rentals", value: overview?.totalRentals ?? 0, hint: "All Time" },
+    { key: "rentals", title: "Active Rentals", value: overview?.activeRentals ?? 0, hint: "In Progress" },
+    { key: "disputes", title: "Disputed Cases", value: overview?.disputedRentals ?? 0, hint: "Pending Review" },
+    { key: "cases", title: "Open Cases", value: overview?.openCases ?? 0, hint: "Escalated Issues" },
+    { key: "feedbacks", title: "Feedbacks", value: feedbackCards.length, hint: "Static for now" },
+  ];
+
   if (loading) {
     return <h2 style={{ padding: 24 }}>Loading admin control center...</h2>;
   }
@@ -165,30 +157,53 @@ function AdminDashboard() {
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>Admin Control Center</h1>
+      <p style={styles.subtitle}>Use the boxes above to jump into each section. The page opens on feedbacks and ratings by default.</p>
       {message && <p style={styles.message}>{message}</p>}
 
       {overview && (
         <div style={styles.statsGrid}>
-          <div style={styles.statCard}><p>Total Users</p><h3>{overview.totalUsers}</h3></div>
-          <div style={styles.statCard}><p>Total Items</p><h3>{overview.totalItems}</h3></div>
-          <div style={styles.statCard}><p>Total Rentals</p><h3>{overview.totalRentals}</h3></div>
-          <div style={styles.statCard}><p>Active Rentals</p><h3>{overview.activeRentals}</h3></div>
-          <div style={styles.statCard}><p>Disputed</p><h3>{overview.disputedRentals}</h3></div>
-          <div style={styles.statCard}><p>Open Cases</p><h3>{overview.openCases}</h3></div>
-          <div style={styles.statCard}><p>Revenue</p><h3>INR {overview.totalRevenue}</h3></div>
+          {statCards.map((card) => (
+            <button
+              key={card.title}
+              type="button"
+              style={{ ...styles.statCard, ...(activeTab === card.key ? styles.statCardActive : {}) }}
+              onClick={() => setActiveTab(card.key)}
+            >
+              <p style={styles.cardLabel}>{card.title}</p>
+              <h3 style={styles.cardValue}>{card.value}</h3>
+              <p style={styles.cardHint}>{card.hint}</p>
+            </button>
+          ))}
         </div>
       )}
 
-      <div style={styles.tabs}>
-        <button style={activeTab === "users" ? styles.tabActive : styles.tab} onClick={() => setActiveTab("users")}>Users</button>
-        <button style={activeTab === "items" ? styles.tabActive : styles.tab} onClick={() => setActiveTab("items")}>Items</button>
-        <button style={activeTab === "rentals" ? styles.tabActive : styles.tab} onClick={() => setActiveTab("rentals")}>Rentals</button>
-        <button style={activeTab === "disputes" ? styles.tabActive : styles.tab} onClick={() => setActiveTab("disputes")}>Disputes</button>
-        <button style={activeTab === "cases" ? styles.tabActive : styles.tab} onClick={() => setActiveTab("cases")}>Case Files</button>
-      </div>
+      {activeTab === "feedbacks" && (
+        <div style={styles.panel}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>User Ratings & Feedback</h2>
+            <p style={styles.sectionMeta}>Static preview for now. This section can later be connected to live review data.</p>
+          </div>
+          <div style={styles.feedbackGrid}>
+            {feedbackCards.map((item) => (
+              <div key={item.id} style={styles.feedbackCard}>
+                <div style={styles.feedbackHeader}>
+                  <h4 style={styles.feedbackUser}>{item.user}</h4>
+                  <span style={styles.feedbackRating}>★ {item.rating}</span>
+                </div>
+                <p style={styles.feedbackText}>{item.feedback}</p>
+                <p style={styles.feedbackDate}>{item.date}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {activeTab === "users" && (
         <div style={styles.panel}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>Users</h2>
+            <p style={styles.sectionMeta}>Approve, block, and inspect marketplace users.</p>
+          </div>
           <input
             style={styles.searchInput}
             placeholder="Search users by name or email"
@@ -214,19 +229,19 @@ function AdminDashboard() {
           ))}
 
           <div style={styles.pagination}>
-            <button style={styles.tab} onClick={() => setUsersPage((p) => Math.max(1, p - 1))}>
-              Prev
-            </button>
+            <button style={styles.pagerBtn} onClick={() => setUsersPage((p) => Math.max(1, p - 1))}>Prev</button>
             <span style={styles.rowMeta}>Page {usersPageData.currentPage} / {usersPageData.totalPages}</span>
-            <button style={styles.tab} onClick={() => setUsersPage((p) => Math.min(usersPageData.totalPages, p + 1))}>
-              Next
-            </button>
+            <button style={styles.pagerBtn} onClick={() => setUsersPage((p) => Math.min(usersPageData.totalPages, p + 1))}>Next</button>
           </div>
         </div>
       )}
 
       {activeTab === "items" && (
         <div style={styles.panel}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>Items</h2>
+            <p style={styles.sectionMeta}>Review item listings and remove problematic entries.</p>
+          </div>
           <input
             style={styles.searchInput}
             placeholder="Search items by title or owner email"
@@ -251,19 +266,19 @@ function AdminDashboard() {
           ))}
 
           <div style={styles.pagination}>
-            <button style={styles.tab} onClick={() => setItemsPage((p) => Math.max(1, p - 1))}>
-              Prev
-            </button>
+            <button style={styles.pagerBtn} onClick={() => setItemsPage((p) => Math.max(1, p - 1))}>Prev</button>
             <span style={styles.rowMeta}>Page {itemsPageData.currentPage} / {itemsPageData.totalPages}</span>
-            <button style={styles.tab} onClick={() => setItemsPage((p) => Math.min(itemsPageData.totalPages, p + 1))}>
-              Next
-            </button>
+            <button style={styles.pagerBtn} onClick={() => setItemsPage((p) => Math.min(itemsPageData.totalPages, p + 1))}>Next</button>
           </div>
         </div>
       )}
 
       {activeTab === "rentals" && (
         <div style={styles.panel}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>Rentals</h2>
+            <p style={styles.sectionMeta}>Search, audit, and monitor rental activity.</p>
+          </div>
           <input
             style={styles.searchInput}
             placeholder="Search rentals by title, status, or user email"
@@ -285,19 +300,19 @@ function AdminDashboard() {
           ))}
 
           <div style={styles.pagination}>
-            <button style={styles.tab} onClick={() => setRentalsPage((p) => Math.max(1, p - 1))}>
-              Prev
-            </button>
+            <button style={styles.pagerBtn} onClick={() => setRentalsPage((p) => Math.max(1, p - 1))}>Prev</button>
             <span style={styles.rowMeta}>Page {rentalsPageData.currentPage} / {rentalsPageData.totalPages}</span>
-            <button style={styles.tab} onClick={() => setRentalsPage((p) => Math.min(rentalsPageData.totalPages, p + 1))}>
-              Next
-            </button>
+            <button style={styles.pagerBtn} onClick={() => setRentalsPage((p) => Math.min(rentalsPageData.totalPages, p + 1))}>Next</button>
           </div>
         </div>
       )}
 
       {activeTab === "disputes" && (
         <div style={styles.panel}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>Disputes</h2>
+            <p style={styles.sectionMeta}>Resolve active disputes from the control center.</p>
+          </div>
           {disputedRentals.length === 0 && <p style={styles.rowMeta}>No open disputes.</p>}
           {disputedRentals.map((rental) => (
             <div key={rental._id} style={styles.rowCard}>
@@ -318,6 +333,10 @@ function AdminDashboard() {
 
       {activeTab === "cases" && (
         <div style={styles.panel}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>Case Files</h2>
+            <p style={styles.sectionMeta}>Escalated reports and incident handling.</p>
+          </div>
           {cases.length === 0 && <p style={styles.rowMeta}>No case files yet.</p>}
           {cases.map((caseItem) => (
             <div key={caseItem._id} style={styles.rowCard}>
@@ -346,71 +365,153 @@ export default AdminDashboard;
 
 const styles = {
   container: {
-    padding: 24,
+    padding: "10px 8px 28px",
+    maxWidth: 1400,
+    margin: "0 auto",
   },
   title: {
     color: "#1f2937",
-    marginBottom: 12,
+    marginBottom: 6,
+    fontSize: 34,
+    letterSpacing: 0.2,
+  },
+  subtitle: {
+    margin: "0 0 12px",
+    color: "#6b7280",
   },
   message: {
     color: "#b91c1c",
   },
   statsGrid: {
     marginTop: 14,
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+    display: "flex",
+    flexWrap: "nowrap",
+    overflowX: "auto",
     gap: 12,
+    paddingBottom: 6,
+    scrollbarWidth: "thin",
   },
   statCard: {
-    border: "1px solid #d1d5db",
-    background: "#f9fafb",
-    borderRadius: 12,
-    padding: 14,
-  },
-  tabs: {
-    display: "flex",
-    gap: 8,
-    marginTop: 18,
-    flexWrap: "wrap",
-  },
-  tab: {
-    border: "1px solid #d1d5db",
-    borderRadius: 999,
-    background: "#f3f4f6",
-    color: "#374151",
-    padding: "8px 12px",
+    border: "1px solid rgba(209,213,219,0.85)",
+    borderRadius: 16,
+    padding: 16,
+    minHeight: 118,
+    textAlign: "left",
     cursor: "pointer",
+    transition: "transform 140ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 140ms cubic-bezier(0.4, 0, 0.2, 1)",
+    backdropFilter: "blur(14px) saturate(135%)",
+    boxShadow: "0 10px 22px rgba(17,24,39,0.08)",
+    color: "#111827",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(243,244,246,0.9) 100%)",
+    minWidth: 185,
+    flex: "0 0 auto",
+    whiteSpace: "nowrap",
   },
-  tabActive: {
-    border: "1px solid #9ca3af",
-    borderRadius: 999,
-    background: "#374151",
-    color: "#fff",
-    padding: "8px 12px",
-    cursor: "pointer",
+  statCardActive: {
+    transform: "translateY(-2px)",
+    boxShadow: "0 16px 30px rgba(17,24,39,0.16)",
+  },
+  cardLabel: {
+    margin: 0,
+    color: "inherit",
+    fontSize: 12,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  cardValue: {
+    margin: "10px 0 4px",
+    color: "inherit",
+    fontSize: 28,
+    fontWeight: 800,
+  },
+  cardHint: {
+    margin: 0,
+    color: "inherit",
+    opacity: 0.72,
+    fontSize: 12,
+    fontWeight: 500,
   },
   panel: {
-    marginTop: 14,
+    marginTop: 18,
     display: "grid",
     gap: 12,
   },
+  sectionHeader: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  sectionTitle: {
+    color: "#1f2937",
+    margin: 0,
+    fontSize: 22,
+  },
+  sectionMeta: {
+    margin: 0,
+    color: "#6b7280",
+    fontSize: 13,
+  },
+  feedbackGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 14,
+  },
+  feedbackCard: {
+    border: "1px solid rgba(209,213,219,0.8)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.9) 100%)",
+    borderRadius: 14,
+    padding: 16,
+    backdropFilter: "blur(12px)",
+    boxShadow: "0 8px 18px rgba(17,24,39,0.08)",
+  },
+  feedbackHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  feedbackUser: {
+    margin: 0,
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: 700,
+  },
+  feedbackRating: {
+    color: "#f59e0b",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  feedbackText: {
+    margin: "8px 0",
+    color: "#374151",
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+  feedbackDate: {
+    margin: 0,
+    color: "#9ca3af",
+    fontSize: 11,
+  },
   searchInput: {
-    border: "1px solid #d1d5db",
-    background: "#fff",
+    border: "1px solid rgba(209,213,219,0.85)",
+    background: "rgba(255,255,255,0.92)",
     borderRadius: 10,
     padding: "10px 12px",
     color: "#111827",
   },
   rowCard: {
-    border: "1px solid #d1d5db",
-    background: "#f8f9fb",
+    border: "1px solid rgba(209,213,219,0.85)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.84) 0%, rgba(243,244,246,0.84) 100%)",
     borderRadius: 12,
     padding: 14,
-    display: "flex",
-    justifyContent: "space-between",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
     gap: 14,
-    alignItems: "center",
-    flexWrap: "wrap",
+    alignItems: "start",
+    backdropFilter: "blur(14px) saturate(135%)",
+    boxShadow: "0 10px 22px rgba(17,24,39,0.08)",
   },
   rowTitle: {
     margin: 0,
@@ -424,9 +525,11 @@ const styles = {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
+    justifyContent: "flex-end",
+    alignItems: "center",
   },
   primaryBtn: {
-    background: "#374151",
+    background: "linear-gradient(180deg, #4b5563 0%, #1f2937 100%)",
     color: "#fff",
     border: "none",
     padding: "8px 10px",
@@ -434,7 +537,7 @@ const styles = {
     cursor: "pointer",
   },
   mutedBtn: {
-    background: "#6b7280",
+    background: "linear-gradient(180deg, #6b7280 0%, #4b5563 100%)",
     color: "#fff",
     border: "none",
     padding: "8px 10px",
@@ -442,7 +545,7 @@ const styles = {
     cursor: "pointer",
   },
   dangerBtn: {
-    background: "#991b1b",
+    background: "linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%)",
     color: "#fff",
     border: "none",
     padding: "8px 10px",
@@ -454,5 +557,14 @@ const styles = {
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
+    flexWrap: "wrap",
+  },
+  pagerBtn: {
+    border: "1px solid #d1d5db",
+    borderRadius: 999,
+    background: "#f3f4f6",
+    color: "#374151",
+    padding: "8px 12px",
+    cursor: "pointer",
   },
 };

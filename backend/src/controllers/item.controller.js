@@ -21,6 +21,14 @@ const isValidHttpUrl = (value = "") => {
   }
 };
 
+const isValidImageSource = (value = "") => {
+  if (isValidHttpUrl(value)) {
+    return true;
+  }
+
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(value);
+};
+
 /**
  * CREATE ITEM
  * Any logged-in user can create an item
@@ -56,8 +64,10 @@ exports.createItem = async (req, res) => {
       return res.status(400).json({ message: "Price per day must be greater than 0" });
     }
 
-    if (images.length > 0 && images.some((url) => !isValidHttpUrl(url))) {
-      return res.status(400).json({ message: "All images must be valid http/https URLs" });
+    if (images.length > 0 && images.some((url) => !isValidImageSource(url))) {
+      return res.status(400).json({
+        message: "All images must be valid http/https URLs or data:image base64 strings"
+      });
     }
 
     const titleWords = title.split(/\s+/).filter(Boolean);

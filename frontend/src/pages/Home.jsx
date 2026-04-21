@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import ItemCard from "../components/ItemCard";
 import SearchBar from "../components/SearchBar";
 
 function Home() {
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [loadingSearch, setLoadingSearch] = useState(false);
@@ -15,9 +17,6 @@ function Home() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [categories, setCategories] = useState([]);
-  const [nearbyItems, setNearbyItems] = useState([]);
-  const [nearbyLoading, setNearbyLoading] = useState(false);
-  const [nearbyMessage, setNearbyMessage] = useState("");
 
   const hasFilters =
     query.trim() ||
@@ -39,41 +38,8 @@ function Home() {
     setSuggestions([]);
   };
 
-  const findNearbyRentals = () => {
-    if (!navigator.geolocation) {
-      setNearbyMessage("Geolocation is not supported by this browser.");
-      return;
-    }
-
-    setNearbyLoading(true);
-    setNearbyMessage("");
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const res = await api.get("/items/nearby", {
-            params: {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-              radiusKm: 15,
-            },
-          });
-
-          setNearbyItems(res.data);
-          if (res.data.length === 0) {
-            setNearbyMessage("No nearby rentals found within 15 km.");
-          }
-        } catch (err) {
-          setNearbyMessage(err.response?.data?.message || "Failed to load nearby rentals");
-        } finally {
-          setNearbyLoading(false);
-        }
-      },
-      () => {
-        setNearbyLoading(false);
-        setNearbyMessage("Location permission denied. Enable location to see nearby rentals.");
-      }
-    );
+  const openMapView = () => {
+    navigate("/map");
   };
 
   useEffect(() => {
@@ -194,22 +160,13 @@ function Home() {
         isSearching={loadingSearch}
       />
 
-      <div style={styles.nearbyHeader}>
-        <h2 style={styles.nearbyTitle}>Nearby Rentals</h2>
-        <button style={styles.nearbyBtn} onClick={findNearbyRentals} disabled={nearbyLoading}>
-          {nearbyLoading ? "Finding..." : "Find Nearby"}
+      <div style={styles.mapActionRow}>
+        <button type="button" style={styles.mapButton} onClick={openMapView}>
+          <span style={styles.mapIcon} aria-hidden="true">🗺️</span>
+          <span style={styles.mapButtonText}>Open Map View</span>
         </button>
+        <p style={styles.mapHint}>View listings around your current location on an interactive map.</p>
       </div>
-
-      {nearbyMessage && <p style={styles.nearbyMessage}>{nearbyMessage}</p>}
-
-      {nearbyItems.length > 0 && (
-        <div style={styles.grid}>
-          {nearbyItems.map((item) => (
-            <ItemCard key={`nearby-${item._id}`} item={item} onTagClick={handleTagClick} />
-          ))}
-        </div>
-      )}
 
       {loadingSearch && <p style={styles.status}>Searching...</p>}
 
@@ -232,10 +189,17 @@ export default Home;
 
 const styles = {
   container: {
-    padding: 24,
+    padding: "10px 6px 24px",
+    maxWidth: 1200,
+    margin: "0 auto",
   },
   heading: {
-    marginBottom: 20,
+    margin: "2px 0 18px",
+    textAlign: "center",
+    color: "#111827",
+    fontSize: 34,
+    letterSpacing: 0.2,
+    textShadow: "0 1px 0 rgba(255,255,255,0.72)",
   },
   status: {
     marginBottom: 16,
@@ -245,34 +209,51 @@ const styles = {
     marginBottom: 12,
     color: "#111827"
   },
-  nearbyHeader: {
-    marginTop: 20,
-    marginBottom: 12,
+  mapActionRow: {
+    marginTop: 16,
+    marginBottom: 20,
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
     gap: 12,
-    flexWrap: "wrap",
+    justifyContent: "center",
+    flexDirection: "column",
+    textAlign: "center",
+    border: "1px solid rgba(209,213,219,0.85)",
+    borderRadius: 16,
+    background: "linear-gradient(180deg, rgba(255,255,255,0.8) 0%, rgba(243,244,246,0.8) 100%)",
+    backdropFilter: "blur(16px) saturate(140%)",
+    padding: "16px 14px",
+    boxShadow: "0 14px 28px rgba(17,24,39,0.08), inset 0 1px 0 rgba(255,255,255,0.4)",
   },
-  nearbyTitle: {
-    margin: 0,
-    color: "#1f2937",
-  },
-  nearbyBtn: {
-    border: "none",
-    borderRadius: 8,
-    background: "#4b5563",
-    color: "#fff",
-    padding: "8px 12px",
+  mapButton: {
+    border: "1px solid rgba(209,213,219,0.85)",
+    borderRadius: 999,
+    background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(243,244,246,0.96) 100%)",
+    color: "#111827",
+    padding: "14px 18px",
     cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 10,
+    boxShadow: "0 10px 24px rgba(17, 24, 39, 0.14), inset 0 1px 0 rgba(255,255,255,0.45)",
+    fontWeight: 700,
   },
-  nearbyMessage: {
-    marginBottom: 14,
+  mapIcon: {
+    fontSize: 20,
+    lineHeight: 1,
+  },
+  mapButtonText: {
+    fontSize: 15,
+  },
+  mapHint: {
+    margin: 0,
     color: "#4b5563",
+    fontSize: 14,
   },
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
     gap: 20,
+    alignItems: "stretch",
   },
 };

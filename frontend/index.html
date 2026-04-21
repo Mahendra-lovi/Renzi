@@ -1,13 +1,119 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Basic -->
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+
+    <!-- SEO -->
+    <title>Renzi - Smart Rental Marketplace</title>
+    <meta name="description" content="Rent anything, anytime. Renzi is a modern rental marketplace for smart users." />
+    <meta name="theme-color" content="#00ADB5" />
+
+    <!-- Favicon (replace later with your logo) -->
+    <link rel="icon" href="/renzi-icon.png" />
+
+    <!-- Google Fonts (Premium combo) -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Smooth Rendering -->
+    <style>
+      :root {
+        --primary: #00ADB5;
+        --accent: #FFC107;
+        --text: #111;
+        --bg: #ffffff;
+      }
+
+      html, body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* 🔥 Professional Logo Styling */
+      .renzi-brand {
+        font-family: 'Poppins', sans-serif;
+        font-size: 34px;
+        font-weight: 800;
+        letter-spacing: 2px;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      /* Optional splash loader */
+      #loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: white;
+        z-index: 9999;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .loader-text {
+        font-family: 'Poppins', sans-serif;
+        font-weight: 700;
+        font-size: 28px;
+        background: linear-gradient(135deg, #00ADB5, #FFC107);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: 2px;
+      }
+
+      .loader-bar {
+        width: 120px;
+        height: 4px;
+        background: #eee;
+        overflow: hidden;
+        border-radius: 10px;
+      }
+
+      .loader-bar span {
+        display: block;
+        height: 100%;
+        width: 40%;
+        background: linear-gradient(90deg, #00ADB5, #FFC107);
+        animation: load 1.2s infinite;
+      }
+
+      @keyframes load {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(250%); }
+      }
+    </style>
   </head>
+
   <body>
+    <!-- 🔥 Professional Splash Screen -->
+    <div id="loader">
+      <div class="loader-text">Renzi</div>
+      <div class="loader-bar"><span></span></div>
+    </div>
+
+    <!-- React Root -->
     <div id="root"></div>
+
+    <!-- Remove loader after load -->
+    <script>
+      window.addEventListener("load", () => {
+        const loader = document.getElementById("loader");
+        setTimeout(() => {
+          loader.style.opacity = "0";
+          loader.style.transition = "0.5s ease";
+          setTimeout(() => loader.remove(), 500);
+        }, 800);
+      });
+    </script>
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
