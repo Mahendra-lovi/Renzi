@@ -13,6 +13,8 @@ import AddItem from "./pages/AddItem";
 import MyListings from "./pages/MyListings";
 import MyRentals from "./pages/MyRentals";
 import OwnerRequests from "./pages/OwnerRequests";
+import AdminRoute from "./components/AdminRoute";
+import AdminDashboard from "./pages/AdminDashboard";
 
 function App() {
   return (
@@ -54,6 +56,11 @@ function App() {
           <Route path="my-listings" element={<MyListings />} />
           <Route path="my-rentals" element={<MyRentals />} />
           <Route path="owner-requests" element={<OwnerRequests />} />
+          <Route path="admin" element={
+            <AdminRoute>
+              <AdminDashboard />
+            </AdminRoute>
+          } />
         </Route>
 
       </Routes>

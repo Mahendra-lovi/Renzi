@@ -1,20 +1,16 @@
-import { createContext, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import api from "../services/api";
-
-export const AuthContext = createContext();
+import { AuthContext } from "./auth-context";
 
 export const AuthProvider = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [bootToken] = useState(() => localStorage.getItem("renzi_token"));
+
+  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(bootToken));
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(bootToken));
 
   useEffect(() => {
-    const token = localStorage.getItem("renzi_token");
-
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    if (!bootToken) return;
 
     api
       .get("/auth/me")
@@ -35,24 +31,25 @@ export const AuthProvider = ({ children }) => {
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [bootToken]);
 
   const login = (token) => {
-    // persist token and immediately load the current user so the UI updates
     localStorage.setItem("renzi_token", token);
-
-    // optimistic authenticated flag (so ProtectedRoute works immediately)
     setIsAuthenticated(true);
+    setLoading(true);
 
-    // fetch `/auth/me` to populate `user` right away
     api
       .get("/auth/me")
       .then((res) => {
         setUser(res.data);
       })
       .catch(() => {
-        // keep isAuthenticated = true (token exists) but clear user on failure
+        localStorage.removeItem("renzi_token");
+        setIsAuthenticated(false);
         setUser(null);
+      })
+      .finally(() => {
+        setLoading(false);
       });
   };
 
@@ -60,6 +57,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("renzi_token");
     setIsAuthenticated(false);
     setUser(null);
+    setLoading(false);
   };
 
   return (

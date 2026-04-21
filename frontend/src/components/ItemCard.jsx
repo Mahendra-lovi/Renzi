@@ -1,6 +1,12 @@
 import { Link } from "react-router-dom";
 
-function ItemCard({ item }) {
+const formatTag = (tag = "") =>
+  String(tag)
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+
+function ItemCard({ item, onTagClick }) {
   return (
     <div style={styles.card}>
       <img
@@ -11,6 +17,21 @@ function ItemCard({ item }) {
         alt={item.title}
         style={styles.image}
       />
+
+      {item.tags?.length > 0 && (
+        <div style={styles.tags}>
+          {item.tags.map((tag, i) => (
+            <button
+              type="button"
+              key={i}
+              style={styles.tag}
+              onClick={() => onTagClick && onTagClick(tag)}
+            >
+              {formatTag(tag)}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={styles.content}>
         <h3 style={styles.title}>{item.title}</h3>
@@ -35,10 +56,11 @@ export default ItemCard;
 
 const styles = {
   card: {
-    background: "#fff",
+    background: "#f8f9fb",
     borderRadius: 12,
+    border: "1px solid #d1d5db",
     overflow: "hidden",
-    boxShadow: "0 8px 25px rgba(0,0,0,0.08)",
+    boxShadow: "0 6px 16px rgba(17,24,39,0.08)",
     transition: "0.2s",
   },
   image: {
@@ -48,6 +70,21 @@ const styles = {
   },
   content: {
     padding: 16,
+  },
+  tags: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    padding: "12px 16px 0",
+  },
+  tag: {
+    border: "1px solid #cbd5e1",
+    background: "#e5e7eb",
+    color: "#374151",
+    borderRadius: 999,
+    padding: "4px 10px",
+    fontSize: 12,
+    cursor: "pointer",
   },
   title: {
     margin: "0 0 8px",
@@ -71,7 +108,7 @@ const styles = {
   },
   button: {
     textDecoration: "none",
-    background: "#111827",
+    background: "#374151",
     color: "#fff",
     padding: "6px 12px",
     borderRadius: 6,

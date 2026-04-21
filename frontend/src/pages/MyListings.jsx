@@ -31,10 +31,10 @@ const handleDelete = async (id) => {
 };
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1>My Listings</h1>
+    <div style={styles.container}>
+      <h1 style={styles.title}>My Listings</h1>
 
-      {items.length === 0 && <p>You haven't created any items yet.</p>}
+      {items.length === 0 && <p style={styles.empty}>You have not created any items yet.</p>}
 
       <div style={styles.grid}>
         {items.map((item) => (
@@ -43,8 +43,17 @@ const handleDelete = async (id) => {
               src={item.images?.[0] || "https://via.placeholder.com/300"}
               style={styles.image}
             />
-            <h3>{item.title}</h3>
-            <p>₹{item.pricePerDay}/day</p>
+            <div style={styles.meta}>
+              <h3 style={styles.itemTitle}>{item.title}</h3>
+              <p style={styles.price}>INR {item.pricePerDay}/day</p>
+              {item.tags?.length > 0 && (
+                <div style={styles.tags}>
+                  {item.tags.slice(0, 4).map((tag) => (
+                    <span key={tag} style={styles.tag}>{tag}</span>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <button
               style={styles.deleteBtn}
@@ -62,6 +71,16 @@ const handleDelete = async (id) => {
 export default MyListings;
 
 const styles = {
+  container: {
+    padding: 24,
+  },
+  title: {
+    marginBottom: 12,
+    color: "#1f2937",
+  },
+  empty: {
+    color: "#4b5563",
+  },
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))",
@@ -69,23 +88,48 @@ const styles = {
     marginTop: 20,
   },
   card: {
-    background: "#fff",
-    padding: 16,
+    background: "#f8f9fb",
+    padding: 12,
     borderRadius: 12,
-    boxShadow: "0 8px 25px rgba(0,0,0,0.08)",
+    border: "1px solid #d1d5db",
+    boxShadow: "0 6px 16px rgba(17,24,39,0.08)",
   },
   image: {
     width: "100%",
-    height: 140,
+    height: 150,
     objectFit: "cover",
-    borderRadius: 8,
+    borderRadius: 10,
+  },
+  meta: {
+    marginTop: 10,
+  },
+  itemTitle: {
+    margin: 0,
+    color: "#111827",
+  },
+  price: {
+    margin: "6px 0 0",
+    color: "#374151",
+  },
+  tags: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8,
+  },
+  tag: {
+    background: "#e5e7eb",
+    color: "#374151",
+    fontSize: 12,
+    padding: "3px 8px",
+    borderRadius: 999,
   },
   deleteBtn: {
     marginTop: 10,
-    background: "#ef4444",
+    background: "#991b1b",
     color: "#fff",
     border: "none",
-    padding: 8,
+    padding: "8px 10px",
     borderRadius: 6,
     cursor: "pointer",
   },

@@ -5,26 +5,70 @@ const agreementSchema = new mongoose.Schema(
     rental: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Rental",
+      required: true,
+      unique: true
+    },
+
+    renter: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
+
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
+
+    item: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Item",
+      required: true
+    },
+
+    startDate: {
+      type: Date,
+      required: true
+    },
+
+    endDate: {
+      type: Date,
+      required: true
+    },
+
+    totalPrice: {
+      type: Number,
       required: true
     },
 
     content: {
-      type: String, // generated text
+      type: String,
       required: true
     },
 
-    ownerAccepted: {
+    ownerSigned: {
       type: Boolean,
       default: false
     },
 
-    renterAccepted: {
+    renterSigned: {
       type: Boolean,
       default: false
     },
 
-    signedAt: {
+    ownerSignedAt: {
       type: Date
+    },
+
+    renterSignedAt: {
+      type: Date
+    },
+
+    status: {
+      type: String,
+      enum: ["pending", "active", "completed"],
+      default: "pending"
     }
   },
   { timestamps: true }

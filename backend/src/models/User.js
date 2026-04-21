@@ -17,6 +17,24 @@ const userSchema = new mongoose.Schema(
 
     phone: String,
 
+    city: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point"
+      },
+      coordinates: {
+        type: [Number],
+        default: undefined
+      }
+    },
+
     role: {
       type: String,
       enum: ["user", "admin"],
@@ -40,5 +58,7 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+userSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("User", userSchema);

@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 // REGISTER USER
 exports.registerUser = async (req, res) => {
   try {
-    const { name, email, password, phone, role } = req.body;
+    const { name, email, password, phone, role, city, lat, lng } = req.body;
 
     if (role === "admin") {
       return res.status(403).json({ message: "Admin registration not allowed" });
@@ -18,13 +18,26 @@ exports.registerUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = await User.create({
+    const parsedLat = Number(lat);
+    const parsedLng = Number(lng);
+
+    const userPayload = {
       name,
       email,
       password: hashedPassword,
       phone,
-      role
-    });
+      role,
+      city: String(city || "").trim()
+    };
+
+    if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLng)) {
+      userPayload.location = {
+        type: "Point",
+        coordinates: [parsedLng, parsedLat]
+      };
+    }
+
+    const user = await User.create(userPayload);
 
     res.status(201).json({
       message: "User registered successfully",

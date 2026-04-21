@@ -42,9 +42,34 @@ const itemSchema = new mongoose.Schema(
     isAvailable: {
       type: Boolean,
       default: true
+    },
+
+    city: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point"
+      },
+      coordinates: {
+        type: [Number],
+        default: undefined
+      }
+    },
+
+    tags: {
+      type: [String],
+      default: []
     }
   },
   { timestamps: true }
 );
+
+itemSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("Item", itemSchema);

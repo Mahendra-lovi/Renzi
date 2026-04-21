@@ -46,6 +46,22 @@ const rentalSchema = new mongoose.Schema(
         "disputed"
       ],
       default: "requested"
+    },
+
+    disputeResolution: {
+      type: String,
+      enum: ["pending", "owner_fault", "renter_fault", "no_fault"],
+      default: null
+    },
+
+    disputeNote: {
+      type: String,
+      default: ""
+    },
+
+    disputeResolvedAt: {
+      type: Date,
+      default: null
     }
   },
   { timestamps: true }

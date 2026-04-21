@@ -10,6 +10,9 @@ function Register() {
     email: "",
     password: "",
     phone: "",
+    city: "",
+    lat: "",
+    lng: "",
   });
 
   const [error, setError] = useState("");
@@ -106,6 +109,39 @@ function Register() {
           onBlur={blur}
           autoComplete="new-password"
           required
+        />
+
+        <input
+          type="text"
+          name="city"
+          placeholder="City (optional but useful for nearby rentals)"
+          value={form.city}
+          onChange={handleChange}
+          style={styles.input}
+          onFocus={focus}
+          onBlur={blur}
+        />
+
+        <input
+          type="number"
+          name="lat"
+          placeholder="Latitude (optional)"
+          value={form.lat}
+          onChange={handleChange}
+          style={styles.input}
+          onFocus={focus}
+          onBlur={blur}
+        />
+
+        <input
+          type="number"
+          name="lng"
+          placeholder="Longitude (optional)"
+          value={form.lng}
+          onChange={handleChange}
+          style={styles.input}
+          onFocus={focus}
+          onBlur={blur}
         />
 
         <button type="submit" style={styles.button} disabled={loading}>

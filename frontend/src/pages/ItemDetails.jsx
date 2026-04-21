@@ -6,15 +6,30 @@ function ItemDetails() {
   const { id } = useParams();
 
   const [item, setItem] = useState(null);
+  const [error, setError] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    api.get("/items").then((res) => {
-      const found = res.data.find((i) => i._id === id);
-      setItem(found);
-    });
+    let isMounted = true;
+
+    api
+      .get(`/items/${id}`)
+      .then((res) => {
+        if (!isMounted) return;
+        setItem(res.data);
+        setError("");
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        setItem(null);
+        setError(err.response?.data?.message || "Failed to load item");
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
   const handleRent = async () => {
@@ -30,6 +45,8 @@ function ItemDetails() {
       setMessage(err.response?.data?.message || "Request failed");
     }
   };
+
+  if (error) return <h2 style={{ padding: 20 }}>{error}</h2>;
 
   if (!item) return <h2 style={{ padding: 20 }}>Loading...</h2>;
 

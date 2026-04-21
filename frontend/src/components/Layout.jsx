@@ -23,7 +23,7 @@ export default Layout;
 const styles = {
   content: {
     padding: 24,
-    background: "#f4f6f8",
+    background: "linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%)",
     minHeight: "calc(100vh - 60px)",
   },
 };
