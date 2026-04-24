@@ -2,18 +2,35 @@ const express = require("express");
 const router = express.Router();
 
 const {
-  registerUser,
-  loginUser
+  requestRegisterOtp,
+  verifyRegisterOtp,
+  resendRegisterOtp,
+  requestForgotPasswordOtp,
+  resendForgotPasswordOtp,
+  resetPasswordWithOtp,
+  loginUser,
+  googleSignIn
 } = require("../controllers/auth.controller");
 
 const authMiddleware = require("../middleware/auth.middleware");
 const User = require("../models/User");
 
-// Register
-router.post("/register", registerUser);
+// Register (step 1: request OTP)
+router.post("/register", requestRegisterOtp);
+router.post("/register/request-otp", requestRegisterOtp);
+
+// Register (step 2: verify OTP)
+router.post("/register/verify-otp", verifyRegisterOtp);
+router.post("/register/resend-otp", resendRegisterOtp);
 
 // Login
 router.post("/login", loginUser);
+router.post("/google", googleSignIn);
+
+// Forgot password
+router.post("/forgot-password/request-otp", requestForgotPasswordOtp);
+router.post("/forgot-password/resend-otp", resendForgotPasswordOtp);
+router.post("/forgot-password/reset", resetPasswordWithOtp);
 
 // 🔐 GET LOGGED-IN USER
 router.get("/me", authMiddleware, async (req, res) => {

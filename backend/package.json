@@ -16,8 +16,10 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "google-auth-library": "^10.6.2",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.0.2"
+    "mongoose": "^9.0.2",
+    "nodemailer": "^8.0.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"

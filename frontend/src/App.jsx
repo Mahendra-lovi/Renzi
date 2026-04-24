@@ -6,6 +6,7 @@ import Layout from "./components/Layout";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
 import Profile from "./pages/Profile";
 import Home from "./pages/Home";
 import MapView from "./pages/MapView";
@@ -37,6 +38,15 @@ function App() {
           element={
             <PublicRoute>
               <Register />
+            </PublicRoute>
+          }
+        />
+
+        <Route
+          path="/forgot-password"
+          element={
+            <PublicRoute>
+              <ForgotPassword />
             </PublicRoute>
           }
         />
