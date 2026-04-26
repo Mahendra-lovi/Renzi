@@ -35,6 +35,35 @@ const rentalSchema = new mongoose.Schema(
       required: true
     },
 
+    purpose: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    pickupPreference: {
+      type: String,
+      enum: ["pickup", "delivery", "flexible"],
+      default: "pickup"
+    },
+
+    notes: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    signatureName: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    agreementAcceptedAt: {
+      type: Date,
+      default: null
+    },
+
     status: {
       type: String,
       enum: [
@@ -61,6 +90,29 @@ const rentalSchema = new mongoose.Schema(
 
     disputeResolvedAt: {
       type: Date,
+      default: null
+    },
+
+    issueStatus: {
+      type: String,
+      enum: ["none", "reported", "resolved"],
+      default: "none"
+    },
+
+    issueSeverity: {
+      type: String,
+      enum: ["low", "medium", "high", "critical"],
+      default: null
+    },
+
+    issueReportedAt: {
+      type: Date,
+      default: null
+    },
+
+    issueReportedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       default: null
     }
   },

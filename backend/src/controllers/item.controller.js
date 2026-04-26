@@ -12,6 +12,27 @@ const normalizeTag = (value = "") =>
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, " ");
 
+const normalizeHashtag = (value = "") => {
+  const cleaned = String(value || "")
+    .trim()
+    .replace(/^#+/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_\s-]/g, "")
+    .replace(/\s+/g, "")
+    .replace(/-+/g, "-");
+
+  if (!cleaned) return "";
+  return `#${cleaned}`;
+};
+
+const extractHashtags = (value = "") => {
+  if (!value) return [];
+  return String(value)
+    .split(",")
+    .map((part) => normalizeHashtag(part))
+    .filter(Boolean);
+};
+
 const isValidHttpUrl = (value = "") => {
   try {
     const url = new URL(value);
@@ -29,6 +50,8 @@ const isValidImageSource = (value = "") => {
   return /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(value);
 };
 
+const normalizeCity = (value = "") => String(value).trim().toLowerCase();
+
 /**
  * CREATE ITEM
  * Any logged-in user can create an item
@@ -45,6 +68,7 @@ exports.createItem = async (req, res) => {
           .filter(Boolean)
       : [];
     const city = String(req.body.city || "").trim();
+    const rawTags = req.body.tags;
     const lat = Number(req.body.lat);
     const lng = Number(req.body.lng);
 
@@ -74,10 +98,16 @@ exports.createItem = async (req, res) => {
     const autoTags = Array.from(
       new Set(
         [...titleWords, category]
-          .map(normalizeTag)
+          .map(normalizeHashtag)
           .filter((tag) => tag.length >= 3)
       )
     ).slice(0, 10);
+
+    const userTags = Array.isArray(rawTags)
+      ? rawTags.map((tag) => normalizeHashtag(tag)).filter(Boolean)
+      : extractHashtags(rawTags);
+
+    const mergedTags = Array.from(new Set([...userTags, ...autoTags])).slice(0, 12);
 
     const owner = await User.findById(req.user.id).select("city location");
 
@@ -87,7 +117,7 @@ exports.createItem = async (req, res) => {
       category,
       pricePerDay,
       images,
-      tags: autoTags,
+      tags: mergedTags,
       owner: req.user.id
     };
 
@@ -136,7 +166,7 @@ exports.getNearbyItems = async (req, res) => {
         }
       }
     })
-      .populate("owner", "email")
+      .populate("owner", "name email")
       .limit(30);
 
     res.json(items);
@@ -149,13 +179,76 @@ exports.getNearbyItems = async (req, res) => {
  * GET ALL ITEMS (public)
  */
 exports.getAllItems = async (req, res) => {
-  const items = await Item.find().populate("owner", "email");
-  res.json(items);
+  try {
+    const filter = {};
+    const city = String(req.query.city || "").trim();
+    const availability = String(req.query.availability || "").trim().toLowerCase();
+
+    if (city) {
+      filter.city = new RegExp(`^${escapeRegex(city)}$`, "i");
+    }
+
+    if (availability === "available") {
+      filter.isAvailable = true;
+    } else if (availability === "unavailable") {
+      filter.isAvailable = false;
+    }
+
+    const items = await Item.find(filter)
+      .populate("owner", "name email")
+      .sort({ createdAt: -1 });
+
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * GET ITEMS BY OWNER (public)
+ * Lightweight payload for map popups and owner summary widgets.
+ */
+exports.getItemsByOwner = async (req, res) => {
+  try {
+    const ownerId = String(req.params.ownerId || "").trim();
+    if (!ownerId) {
+      return res.status(400).json({ message: "ownerId is required" });
+    }
+
+    const limitInput = Number(req.query.limit);
+    const limit = Number.isFinite(limitInput)
+      ? Math.max(1, Math.min(30, Math.floor(limitInput)))
+      : 20;
+
+    const availability = String(req.query.availability || "available").trim().toLowerCase();
+    const city = String(req.query.city || "").trim();
+
+    const filter = { owner: ownerId };
+    if (availability === "available") {
+      filter.isAvailable = true;
+    } else if (availability === "unavailable") {
+      filter.isAvailable = false;
+    }
+
+    if (city) {
+      filter.city = new RegExp(`^${escapeRegex(normalizeCity(city))}$`, "i");
+    }
+
+    const items = await Item.find(filter)
+      .select("title category images pricePerDay isAvailable city location owner")
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 exports.getItemById = async (req, res) => {
   try {
-    const item = await Item.findById(req.params.id).populate("owner", "email");
+    const item = await Item.findById(req.params.id).populate("owner", "name email");
 
     if (!item) {
       return res.status(404).json({ message: "Item not found" });
@@ -209,7 +302,16 @@ exports.updateItem = async (req, res) => {
     }
 
     // 4️⃣ update allowed
-    Object.assign(item, req.body);
+    const nextPayload = { ...req.body };
+
+    if (Object.prototype.hasOwnProperty.call(nextPayload, "tags")) {
+      const normalizedTags = Array.isArray(nextPayload.tags)
+        ? nextPayload.tags.map((tag) => normalizeHashtag(tag)).filter(Boolean)
+        : extractHashtags(nextPayload.tags);
+      nextPayload.tags = Array.from(new Set(normalizedTags)).slice(0, 12);
+    }
+
+    Object.assign(item, nextPayload);
     await item.save();
 
     res.json({ message: "Item updated successfully", item });
@@ -273,11 +375,14 @@ exports.searchItems = async (req, res) => {
 
     const trimmedQuery = q.trim();
     if (trimmedQuery) {
-      const queryRegex = new RegExp(escapeRegex(trimmedQuery), "i");
+      const normalizedHashQuery = normalizeHashtag(trimmedQuery);
+      const plainHashQuery = normalizedHashQuery.replace(/^#/, "");
+      const queryRegex = new RegExp(escapeRegex(trimmedQuery.replace(/^#+/, "")), "i");
+      const tagRegex = new RegExp(`^#?${escapeRegex(plainHashQuery)}`, "i");
       filter.$or = [
         { title: queryRegex },
         { description: queryRegex },
-        { tags: queryRegex }
+        { tags: tagRegex },
       ];
     }
 
@@ -302,7 +407,7 @@ exports.searchItems = async (req, res) => {
     }
 
     const items = await Item.find(filter)
-      .populate("owner", "email")
+      .populate("owner", "name email")
       .sort({ createdAt: -1 });
 
     res.json(items);
@@ -322,7 +427,8 @@ exports.getSearchSuggestions = async (req, res) => {
       return res.json([]);
     }
 
-    const suggestionRegex = new RegExp(escapeRegex(query), "i");
+    const plainQuery = query.replace(/^#+/, "");
+    const suggestionRegex = new RegExp(escapeRegex(plainQuery), "i");
 
     const matchedItems = await Item.find({
       $or: [
@@ -338,22 +444,24 @@ exports.getSearchSuggestions = async (req, res) => {
     const suggestions = [];
     const seen = new Set();
 
-    const maybeAddSuggestion = (value) => {
+    const maybeAddSuggestion = (value, type = "default") => {
       if (!value) return;
       const normalized = String(value).trim();
       if (!normalized) return;
-      const dedupeKey = normalized.toLowerCase();
+      const formatted = type === "tag" ? normalizeHashtag(normalized) : normalized;
+      if (!formatted) return;
+      const dedupeKey = formatted.toLowerCase();
       if (seen.has(dedupeKey)) return;
-      if (!suggestionRegex.test(normalized)) return;
+      if (!suggestionRegex.test(formatted.replace(/^#/, ""))) return;
 
       seen.add(dedupeKey);
-      suggestions.push(normalized);
+      suggestions.push(formatted);
     };
 
     matchedItems.forEach((item) => {
-      maybeAddSuggestion(item.title);
-      maybeAddSuggestion(item.category);
-      (item.tags || []).forEach(maybeAddSuggestion);
+      maybeAddSuggestion(item.title, "default");
+      maybeAddSuggestion(item.category, "default");
+      (item.tags || []).forEach((tag) => maybeAddSuggestion(tag, "tag"));
     });
 
     res.json(suggestions.slice(0, 8));

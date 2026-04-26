@@ -17,6 +17,7 @@ import MyRentals from "./pages/MyRentals";
 import OwnerRequests from "./pages/OwnerRequests";
 import AdminRoute from "./components/AdminRoute";
 import AdminDashboard from "./pages/AdminDashboard";
+import { LiveLocationProvider } from "./context/LiveLocationContext";
 
 function App() {
   return (
@@ -56,7 +57,9 @@ function App() {
           path="/"
           element={
             <ProtectedRoute>
-              <Layout />
+              <LiveLocationProvider>
+                <Layout />
+              </LiveLocationProvider>
             </ProtectedRoute>
           }
         >

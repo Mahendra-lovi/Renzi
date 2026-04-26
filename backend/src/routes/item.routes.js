@@ -7,6 +7,7 @@ const {
   getAllItems,
   getItemById,
   getNearbyItems,
+  getItemsByOwner,
   updateItem,
   deleteItem,
   getMyItems,
@@ -20,6 +21,7 @@ router.get("/my-items", auth, getMyItems);
 router.get("/search/suggestions", getSearchSuggestions);
 router.get("/search", searchItems);
 router.get("/nearby", getNearbyItems);
+router.get("/by-owner/:ownerId", getItemsByOwner);
 router.get("/:id", getItemById);
 
 // 🔒 protected ownership routes

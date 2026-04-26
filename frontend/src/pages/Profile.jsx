@@ -230,7 +230,7 @@ function Profile() {
                 {rentalStats.disputed > 0 && (
                   <div style={styles.statusChip}>
                     <span style={{ ...styles.chipIndicator, background: "#991b1b" }} />
-                    Disputed: {rentalStats.disputed}
+                    Reported Issues: {rentalStats.disputed}
                   </div>
                 )}
               </div>

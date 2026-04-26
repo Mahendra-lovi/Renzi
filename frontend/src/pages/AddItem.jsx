@@ -14,6 +14,7 @@ function AddItem() {
     title: "",
     description: "",
     category: "",
+    tags: "",
     pricePerDay: "",
     image: "",
     imageName: "",
@@ -223,6 +224,11 @@ function AddItem() {
     const description = form.description.trim();
     const category = form.category.trim();
     const image = form.image;
+    const tags = form.tags
+      .split(",")
+      .map((tag) => String(tag || "").trim())
+      .filter(Boolean)
+      .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
     const city = form.city.trim();
     const pricePerDay = Number(form.pricePerDay);
     const lat = form.lat === "" ? undefined : Number(form.lat);
@@ -250,6 +256,7 @@ function AddItem() {
         title,
         description,
         category,
+        tags,
         pricePerDay,
         images: [image],
         city,
@@ -309,6 +316,17 @@ function AddItem() {
                 required
                 style={styles.textInput}
               />
+
+              <label htmlFor="tags" style={styles.fieldLabel}>Hashtags (optional)</label>
+              <input
+                id="tags"
+                name="tags"
+                placeholder="camera, canon200d, photography"
+                value={form.tags}
+                onChange={handleChange}
+                style={styles.textInput}
+              />
+              <p style={styles.helperText}>Tags are comma separated. `#` is added automatically when saved.</p>
             </div>
 
             <div style={styles.priceCard}>

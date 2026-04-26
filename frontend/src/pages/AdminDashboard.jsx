@@ -145,7 +145,7 @@ function AdminDashboard() {
     { key: "items", title: "Total Items", value: overview?.totalItems ?? 0, hint: "Available to Rent" },
     { key: "rentals", title: "Total Rentals", value: overview?.totalRentals ?? 0, hint: "All Time" },
     { key: "rentals", title: "Active Rentals", value: overview?.activeRentals ?? 0, hint: "In Progress" },
-    { key: "disputes", title: "Disputed Cases", value: overview?.disputedRentals ?? 0, hint: "Pending Review" },
+    { key: "disputes", title: "Reported Issues", value: overview?.disputedRentals ?? 0, hint: "Pending Review" },
     { key: "cases", title: "Open Cases", value: overview?.openCases ?? 0, hint: "Escalated Issues" },
     { key: "feedbacks", title: "Feedbacks", value: feedbackCards.length, hint: "Static for now" },
   ];
@@ -310,10 +310,10 @@ function AdminDashboard() {
       {activeTab === "disputes" && (
         <div style={styles.panel}>
           <div style={styles.sectionHeader}>
-            <h2 style={styles.sectionTitle}>Disputes</h2>
-            <p style={styles.sectionMeta}>Resolve active disputes from the control center.</p>
+            <h2 style={styles.sectionTitle}>Reported Issues</h2>
+            <p style={styles.sectionMeta}>Review and resolve reported issues from marketplace participants.</p>
           </div>
-          {disputedRentals.length === 0 && <p style={styles.rowMeta}>No open disputes.</p>}
+          {disputedRentals.length === 0 && <p style={styles.rowMeta}>No reported issues.</p>}
           {disputedRentals.map((rental) => (
             <div key={rental._id} style={styles.rowCard}>
               <div>
