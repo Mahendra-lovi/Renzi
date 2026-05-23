@@ -77,6 +77,8 @@ function MapView() {
   const [items, setItems] = useState([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsMessage, setItemsMessage] = useState("");
+  const [registeredUsers, setRegisteredUsers] = useState([]);
+  const [usersMessage, setUsersMessage] = useState("");
   const [ownerItemsByUser, setOwnerItemsByUser] = useState({});
   const didFitRef = useRef(false);
 
@@ -168,6 +170,32 @@ function MapView() {
     };
   }, [itemScope, radiusKm, hasCoordinates, myLocation.lat, myLocation.lng, resolvedCity]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchRegisteredUsers = async () => {
+      try {
+        setUsersMessage("");
+        const response = await api.get("/auth/users-locations");
+        if (cancelled) return;
+        setRegisteredUsers(Array.isArray(response.data?.users) ? response.data.users : []);
+      } catch (error) {
+        if (!cancelled) {
+          setUsersMessage(error?.response?.data?.message || "Failed to load registered user markers.");
+          setRegisteredUsers([]);
+        }
+      }
+    };
+
+    fetchRegisteredUsers();
+    const intervalId = window.setInterval(fetchRegisteredUsers, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
   const loadOwnerItems = useCallback(async (ownerId) => {
     if (!ownerId) return;
 
@@ -242,9 +270,44 @@ function MapView() {
     });
   }, [user?.email, user?.name]);
 
+  const liveUsersById = useMemo(() => {
+    const map = new Map();
+    otherUsers.forEach((entry) => {
+      const id = String(entry?.userId || "");
+      if (!id) return;
+      map.set(id, entry);
+    });
+    return map;
+  }, [otherUsers]);
+
+  const visibleNetworkUsers = useMemo(() => {
+    const selfId = String(user?._id || "");
+    return registeredUsers
+      .map((entry) => {
+        const id = String(entry?.userId || "");
+        const liveEntry = liveUsersById.get(id);
+        const lat = Number(liveEntry?.lat ?? entry?.lat);
+        const lng = Number(liveEntry?.lng ?? entry?.lng);
+
+        return {
+          userId: id,
+          name: String(entry?.name || liveEntry?.name || "User"),
+          email: String(entry?.email || liveEntry?.email || ""),
+          city: String(entry?.city || ""),
+          profileImage: String(entry?.profileImage || ""),
+          lat,
+          lng,
+          updatedAt: String(liveEntry?.updatedAt || entry?.updatedAt || ""),
+          online: Boolean(liveEntry)
+        };
+      })
+      .filter((entry) => entry.userId && entry.userId !== selfId)
+      .filter((entry) => Number.isFinite(entry.lat) && Number.isFinite(entry.lng));
+  }, [liveUsersById, registeredUsers, user?._id]);
+
   const otherUserIcons = useMemo(() => {
     const cache = new Map();
-    for (const u of otherUsers) {
+    for (const u of visibleNetworkUsers) {
       const id = String(u?.userId || "");
       if (!id || cache.has(id)) continue;
 
@@ -264,10 +327,12 @@ function MapView() {
           className: "",
           html: `
             <div style="display:flex;flex-direction:column;align-items:center;gap:0;">
-              <div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(180deg,#ffffff 0%,#f3f4f6 100%);border:3px solid #111827;box-shadow:0 12px 24px rgba(17,24,39,.18);display:flex;align-items:center;justify-content:center;overflow:hidden;transform:translateY(0);transition:transform .22s ease, box-shadow .22s ease;">
-                <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(180deg,#6b7280 0%,#111827 100%);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;letter-spacing:.4px;">${initials}</div>
+              <div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(180deg,#ffffff 0%,#f3f4f6 100%);border:3px solid ${u.online ? "#15803d" : "#475569"};box-shadow:0 12px 24px rgba(17,24,39,.18);display:flex;align-items:center;justify-content:center;overflow:hidden;transform:translateY(0);transition:transform .22s ease, box-shadow .22s ease;">
+                ${u.profileImage
+                  ? `<img src="${escapeHtml(u.profileImage)}" alt="${escapeHtml(label)}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;display:block;" />`
+                  : `<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(180deg,#6b7280 0%,#111827 100%);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;letter-spacing:.4px;">${initials}</div>`}
               </div>
-              <div style="width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:14px solid #111827;margin-top:-2px;"></div>
+              <div style="width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:14px solid ${u.online ? "#15803d" : "#475569"};margin-top:-2px;"></div>
             </div>
           `,
           iconSize: [46, 62],
@@ -277,7 +342,7 @@ function MapView() {
       );
     }
     return cache;
-  }, [otherUsers]);
+  }, [visibleNetworkUsers]);
 
   const itemIcons = useMemo(() => {
     const cache = new Map();
@@ -322,26 +387,6 @@ function MapView() {
 
     return [Number(myLocation.lat), Number(myLocation.lng)];
   }, [hasCoordinates, myLocation.lat, myLocation.lng]);
-
-  const visibleOtherUsers = useMemo(() => {
-    const selfId = String(user?._id || "");
-    return otherUsers
-      .filter((u) => {
-        const id = String(u?.userId || "");
-        if (!id || id === selfId) return false;
-        const lat = Number(u?.lat);
-        const lng = Number(u?.lng);
-        return Number.isFinite(lat) && Number.isFinite(lng);
-      })
-      .map((u) => ({
-        userId: String(u.userId),
-        name: String(u?.name || u?.email || "User"),
-        email: String(u?.email || ""),
-        lat: Number(u.lat),
-        lng: Number(u.lng),
-        updatedAt: String(u?.updatedAt || ""),
-      }));
-  }, [otherUsers, user?._id]);
 
   const visibleItems = useMemo(() => {
     return items
@@ -442,7 +487,7 @@ function MapView() {
               </Marker>
             ) : null}
 
-            {visibleOtherUsers.map((u) => {
+            {visibleNetworkUsers.map((u) => {
               const ownerState = ownerItemsByUser[u.userId];
               const listingCount = ownerState?.items?.length ?? "--";
 
@@ -458,6 +503,7 @@ function MapView() {
                   <Popup>
                     <div style={styles.popup}>
                       <strong>{u.name}</strong>
+                      <p style={styles.popupLine}>{u.online ? "Online" : "Offline"}</p>
                       <p style={styles.popupLine}>Listings: {listingCount}</p>
                       {u.updatedAt ? (
                         <p style={styles.popupLine}>Updated: {new Date(u.updatedAt).toLocaleTimeString()}</p>
@@ -510,10 +556,11 @@ function MapView() {
                 : "Waiting for coordinates..."}
             </span>
             <span style={styles.infoMeta}>
-              Users: {visibleOtherUsers.length} | Items: {visibleItems.length}
+              Users: {visibleNetworkUsers.length} | Items: {visibleItems.length}
             </span>
             {itemsLoading ? <span style={styles.infoMeta}>Loading item layer...</span> : null}
             {itemsMessage ? <span style={styles.infoMeta}>{itemsMessage}</span> : null}
+            {usersMessage ? <span style={styles.infoMeta}>{usersMessage}</span> : null}
             {permissionRequired ? (
               <span style={styles.infoMeta}>Location permission is required for live sharing.</span>
             ) : null}

@@ -499,3 +499,34 @@ exports.updateProfilePhoto = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+exports.updateMyLocation = async (req, res) => {
+  try {
+    const lat = Number(req.body?.lat);
+    const lng = Number(req.body?.lng);
+    const city = String(req.body?.city || "").trim();
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      return res.status(400).json({ message: "Valid lat and lng are required" });
+    }
+
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ message: "Invalid location coordinates" });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.location = buildLocation(lat, lng);
+    if (city) {
+      user.city = city;
+    }
+    await user.save();
+
+    return res.status(200).json({ message: "Location updated" });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};

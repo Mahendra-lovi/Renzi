@@ -2,6 +2,7 @@ import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { AuthContext } from "./auth-context";
 import { LiveLocationContext } from "./live-location-context";
+import api from "../services/api";
 
 const MOVEMENT_THRESHOLD_METERS = 25;
 const UPDATE_INTERVAL_MS = 3000;
@@ -42,6 +43,7 @@ export function LiveLocationProvider({ children }) {
   const reverseAbortRef = useRef(null);
   const lastSentRef = useRef({ ts: 0, lat: null, lng: null });
   const didLookupCityRef = useRef(false);
+  const latestCityRef = useRef("");
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -106,6 +108,14 @@ export function LiveLocationProvider({ children }) {
             accuracy: next.accuracy,
           });
 
+          api.patch("/auth/location", {
+            lat: next.lat,
+            lng: next.lng,
+            city: latestCityRef.current,
+          }).catch(() => {
+            // Keep realtime map flow even if persistence fails transiently.
+          });
+
           lastSentRef.current = {
             ts: now,
             lat: next.lat,
@@ -134,7 +144,16 @@ export function LiveLocationProvider({ children }) {
                 "";
 
               if (city) {
+                latestCityRef.current = city;
                 setMyLocation((prev) => ({ ...prev, city }));
+
+                api.patch("/auth/location", {
+                  lat: next.lat,
+                  lng: next.lng,
+                  city,
+                }).catch(() => {
+                  // Best-effort city enrichment.
+                });
               }
             }
           } catch {
@@ -177,6 +196,7 @@ export function LiveLocationProvider({ children }) {
 
       socketRef.current = null;
       didLookupCityRef.current = false;
+      latestCityRef.current = "";
       lastSentRef.current = { ts: 0, lat: null, lng: null };
     };
   }, [isAuthenticated]);

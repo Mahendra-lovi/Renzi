@@ -10,7 +10,8 @@ const {
   resetPasswordWithOtp,
   loginUser,
   googleSignIn,
-  updateProfilePhoto
+  updateProfilePhoto,
+  updateMyLocation
 } = require("../controllers/auth.controller");
 
 const authMiddleware = require("../middleware/auth.middleware");
@@ -49,5 +50,35 @@ router.get("/me", authMiddleware, async (req, res) => {
 });
 
 router.patch("/profile-photo", authMiddleware, updateProfilePhoto);
+router.patch("/location", authMiddleware, updateMyLocation);
+
+router.get("/users-locations", authMiddleware, async (req, res) => {
+  try {
+    const users = await User.find({
+      "location.type": "Point",
+      "location.coordinates.0": { $exists: true },
+      "location.coordinates.1": { $exists: true }
+    })
+      .select("name email city profileImage location updatedAt")
+      .lean();
+
+    const normalized = users
+      .map((user) => ({
+        userId: String(user._id),
+        name: String(user.name || "User"),
+        email: String(user.email || ""),
+        city: String(user.city || ""),
+        profileImage: String(user.profileImage || ""),
+        lat: Number(user.location?.coordinates?.[1]),
+        lng: Number(user.location?.coordinates?.[0]),
+        updatedAt: user.updatedAt ? new Date(user.updatedAt).toISOString() : ""
+      }))
+      .filter((user) => Number.isFinite(user.lat) && Number.isFinite(user.lng));
+
+    res.json({ users: normalized });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch user locations" });
+  }
+});
 
 module.exports = router;
