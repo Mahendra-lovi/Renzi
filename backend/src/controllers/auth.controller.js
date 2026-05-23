@@ -37,6 +37,19 @@ const buildLocation = (lat, lng) => {
   };
 };
 
+const isValidProfileImage = (value = "") => {
+  if (!value) return true;
+
+  const normalized = String(value).trim();
+  if (!normalized) return true;
+
+  if (/^https?:\/\//i.test(normalized)) {
+    return true;
+  }
+
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(normalized);
+};
+
 // START REGISTRATION BY SENDING EMAIL OTP
 exports.requestRegisterOtp = async (req, res) => {
   try {
@@ -450,6 +463,69 @@ exports.resetPasswordWithOtp = async (req, res) => {
     await user.save();
 
     return res.status(200).json({ message: "Password reset successful. Please login." });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+exports.updateProfilePhoto = async (req, res) => {
+  try {
+    const rawImage = String(req.body?.profileImage || "").trim();
+
+    if (!isValidProfileImage(rawImage)) {
+      return res.status(400).json({ message: "Profile image must be a valid http/https URL or data:image base64 string" });
+    }
+
+    if (rawImage.length > 3_000_000) {
+      return res.status(400).json({ message: "Profile image is too large" });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.profileImage = rawImage;
+    await user.save();
+
+    const safeUser = user.toObject();
+    delete safeUser.password;
+
+    return res.status(200).json({
+      message: rawImage ? "Profile photo updated" : "Profile photo removed",
+      user: safeUser
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+exports.updateMyLocation = async (req, res) => {
+  try {
+    const lat = Number(req.body?.lat);
+    const lng = Number(req.body?.lng);
+    const city = String(req.body?.city || "").trim();
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      return res.status(400).json({ message: "Valid lat and lng are required" });
+    }
+
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ message: "Invalid location coordinates" });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.location = buildLocation(lat, lng);
+    if (city) {
+      user.city = city;
+    }
+    await user.save();
+
+    return res.status(200).json({ message: "Location updated" });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

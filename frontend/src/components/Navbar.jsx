@@ -67,7 +67,11 @@ function Navbar({ onMenu }) {
 
       <div style={styles.profileBox} onClick={() => navigate("/profile")}>
         <div style={avatarStyle}>
-          {user?.name?.charAt(0).toUpperCase() || "U"}
+          {user?.profileImage ? (
+            <img src={user.profileImage} alt={user?.name || "User"} style={styles.avatarImage} />
+          ) : (
+            user?.name?.charAt(0).toUpperCase() || "U"
+          )}
         </div>
       </div>
     </header>
@@ -189,6 +193,13 @@ const styles = {
     fontWeight: 800,
     boxShadow: "0 6px 16px rgba(17, 24, 39, 0.16)",
     transition: "all 220ms ease",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
   },
 
   avatarMerged: {

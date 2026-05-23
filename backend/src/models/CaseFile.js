@@ -87,6 +87,33 @@ const caseFileSchema = new mongoose.Schema(
     closedAt: {
       type: Date,
       default: null
+    },
+
+    ownerContactStatus: {
+      type: String,
+      enum: ["none", "attempted", "confirmed"],
+      default: "none"
+    },
+
+    escalationStage: {
+      type: String,
+      enum: ["owner_first", "admin_review", "resolved"],
+      default: "owner_first"
+    },
+
+    autoEscalated: {
+      type: Boolean,
+      default: false
+    },
+
+    escalationReason: {
+      type: String,
+      default: ""
+    },
+
+    escalatedAt: {
+      type: Date,
+      default: null
     }
   },
   { timestamps: true }

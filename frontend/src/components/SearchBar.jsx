@@ -27,7 +27,7 @@ function SearchBar({
       <div style={styles.searchRow}>
         <div style={styles.searchInputWrap}>
           <input
-            placeholder="Search title, description, or tags..."
+            placeholder="Search title, description, or #hashtags..."
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
             style={styles.input}

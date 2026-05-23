@@ -22,13 +22,87 @@ const getStatusColor = (status) => {
 };
 
 function Profile() {
-  const { user } = useContext(AuthContext);
+  const { user, updateUser } = useContext(AuthContext);
   const [listings, setListings] = useState([]);
   const [myRentals, setMyRentals] = useState([]);
   const [ownerRequests, setOwnerRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [photoMessage, setPhotoMessage] = useState("");
+  const [isPhotoUpdating, setIsPhotoUpdating] = useState(false);
   const badge = getTrustBadge(user?.trustScore || 0);
+
+  const handleProfilePhotoChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setPhotoMessage("Please choose a valid image file.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setPhotoMessage("Please choose an image under 2MB.");
+      event.target.value = "";
+      return;
+    }
+
+    const allowUpload = window.confirm(
+      "Do you want to set this photo as your profile picture? This photo will be visible to other users."
+    );
+
+    if (!allowUpload) {
+      setPhotoMessage("Profile photo update cancelled.");
+      event.target.value = "";
+      return;
+    }
+
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Failed to read image"));
+      reader.readAsDataURL(file);
+    }).catch(() => "");
+
+    if (!dataUrl) {
+      setPhotoMessage("Could not process image. Please try again.");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      setIsPhotoUpdating(true);
+      setPhotoMessage("");
+      const res = await api.patch("/auth/profile-photo", { profileImage: dataUrl });
+      updateUser(res.data.user);
+      setPhotoMessage("Profile photo updated.");
+    } catch (err) {
+      setPhotoMessage(err.response?.data?.message || "Failed to update profile photo.");
+    } finally {
+      setIsPhotoUpdating(false);
+      event.target.value = "";
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    const allowRemove = window.confirm("Remove your profile photo?");
+    if (!allowRemove) {
+      return;
+    }
+
+    try {
+      setIsPhotoUpdating(true);
+      setPhotoMessage("");
+      const res = await api.patch("/auth/profile-photo", { profileImage: "" });
+      updateUser(res.data.user);
+      setPhotoMessage("Profile photo removed.");
+    } catch (err) {
+      setPhotoMessage(err.response?.data?.message || "Failed to remove profile photo.");
+    } finally {
+      setIsPhotoUpdating(false);
+    }
+  };
 
   useEffect(() => {
     const fetchActivityData = async () => {
@@ -94,8 +168,33 @@ function Profile() {
         <div style={styles.headerSection}>
           <div style={styles.avatarBox}>
             <div style={styles.avatar}>
-              {user.name?.charAt(0).toUpperCase() || "U"}
+              {user.profileImage ? (
+                <img src={user.profileImage} alt={user.name || "User"} style={styles.avatarImage} />
+              ) : (
+                user.name?.charAt(0).toUpperCase() || "U"
+              )}
             </div>
+            <label style={isPhotoUpdating ? styles.photoUploadBtnDisabled : styles.photoUploadBtn}>
+              {isPhotoUpdating ? "Updating..." : "Upload photo"}
+              <input
+                type="file"
+                accept="image/*"
+                style={styles.hiddenFileInput}
+                onChange={handleProfilePhotoChange}
+                disabled={isPhotoUpdating}
+              />
+            </label>
+            {user.profileImage ? (
+              <button
+                type="button"
+                style={isPhotoUpdating ? styles.photoRemoveBtnDisabled : styles.photoRemoveBtn}
+                onClick={handleRemovePhoto}
+                disabled={isPhotoUpdating}
+              >
+                Remove photo
+              </button>
+            ) : null}
+            {photoMessage ? <p style={styles.photoMessage}>{photoMessage}</p> : null}
           </div>
           <div style={styles.headerInfo}>
             <h1 style={styles.name}>{user.name}</h1>
@@ -230,7 +329,7 @@ function Profile() {
                 {rentalStats.disputed > 0 && (
                   <div style={styles.statusChip}>
                     <span style={{ ...styles.chipIndicator, background: "#991b1b" }} />
-                    Disputed: {rentalStats.disputed}
+                    Reported Issues: {rentalStats.disputed}
                   </div>
                 )}
               </div>
@@ -377,6 +476,10 @@ const styles = {
   },
   avatarBox: {
     flex: "0 0 auto",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 8,
   },
   avatar: {
     width: 80,
@@ -391,6 +494,67 @@ const styles = {
     fontWeight: 800,
     boxShadow: "0 12px 28px rgba(17, 24, 39, 0.22)",
     border: "3px solid rgba(255,255,255,0.5)",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  hiddenFileInput: {
+    display: "none",
+  },
+  photoUploadBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    border: "1px solid rgba(148,163,184,0.7)",
+    background: "#fff",
+    color: "#111827",
+    fontSize: 12,
+    fontWeight: 700,
+    padding: "6px 12px",
+    cursor: "pointer",
+  },
+  photoUploadBtnDisabled: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    border: "1px solid rgba(148,163,184,0.7)",
+    background: "#e5e7eb",
+    color: "#6b7280",
+    fontSize: 12,
+    fontWeight: 700,
+    padding: "6px 12px",
+    cursor: "not-allowed",
+  },
+  photoRemoveBtn: {
+    border: "none",
+    background: "none",
+    color: "#dc2626",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    padding: 0,
+  },
+  photoRemoveBtnDisabled: {
+    border: "none",
+    background: "none",
+    color: "#9ca3af",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "not-allowed",
+    padding: 0,
+  },
+  photoMessage: {
+    margin: 0,
+    fontSize: 12,
+    color: "#4b5563",
+    textAlign: "center",
+    maxWidth: 140,
   },
   headerInfo: {
     flex: 1,

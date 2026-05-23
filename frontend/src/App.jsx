@@ -12,11 +12,13 @@ import Home from "./pages/Home";
 import MapView from "./pages/MapView";
 import ItemDetails from "./pages/ItemDetails";
 import AddItem from "./pages/AddItem";
+import Chats from "./pages/Chats";
 import MyListings from "./pages/MyListings";
 import MyRentals from "./pages/MyRentals";
 import OwnerRequests from "./pages/OwnerRequests";
 import AdminRoute from "./components/AdminRoute";
 import AdminDashboard from "./pages/AdminDashboard";
+import { LiveLocationProvider } from "./context/LiveLocationContext";
 
 function App() {
   return (
@@ -56,7 +58,9 @@ function App() {
           path="/"
           element={
             <ProtectedRoute>
-              <Layout />
+              <LiveLocationProvider>
+                <Layout />
+              </LiveLocationProvider>
             </ProtectedRoute>
           }
         >
@@ -65,6 +69,7 @@ function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="items/:id" element={<ItemDetails />} />
           <Route path="add-item" element={<AddItem />} />
+          <Route path="chats" element={<Chats />} />
           <Route path="my-listings" element={<MyListings />} />
           <Route path="my-rentals" element={<MyRentals />} />
           <Route path="owner-requests" element={<OwnerRequests />} />

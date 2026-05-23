@@ -1,14 +1,21 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 const formatTag = (tag = "") =>
-  String(tag)
+  `#${String(tag)
     .trim()
+    .replace(/^#+/, "")
     .replace(/\s+/g, " ")
-    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+    .replace(/\b\w/g, (ch) => ch.toUpperCase())}`;
 
 function ItemCard({ item, onTagClick }) {
+  const navigate = useNavigate();
+
+  const openDetails = () => {
+    navigate(`/items/${item._id}`);
+  };
+
   return (
-    <div style={styles.card}>
+    <div style={styles.card} onClick={openDetails} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && openDetails()}>
       <img
         src={
           item.images?.[0] ||
@@ -25,7 +32,10 @@ function ItemCard({ item, onTagClick }) {
               type="button"
               key={i}
               style={styles.tag}
-              onClick={() => onTagClick && onTagClick(tag)}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (onTagClick) onTagClick(tag);
+              }}
             >
               {formatTag(tag)}
             </button>
@@ -42,10 +52,7 @@ function ItemCard({ item, onTagClick }) {
 
         <div style={styles.footer}>
           <span style={styles.price}>₹{item.pricePerDay}/day</span>
-
-          <Link to={`/items/${item._id}`} style={styles.button}>
-            View
-          </Link>
+          <span style={styles.openHint}>Open</span>
         </div>
       </div>
     </div>
@@ -62,6 +69,7 @@ const styles = {
     overflow: "hidden",
     boxShadow: "0 6px 16px rgba(17,24,39,0.08)",
     transition: "0.2s",
+    cursor: "pointer",
   },
   image: {
     width: "100%",
@@ -106,12 +114,12 @@ const styles = {
     fontWeight: 600,
     color: "#111827",
   },
-  button: {
-    textDecoration: "none",
-    background: "#374151",
-    color: "#fff",
-    padding: "6px 12px",
+  openHint: {
+    color: "#4b5563",
+    padding: "6px 10px",
     borderRadius: 6,
-    fontSize: 14,
+    fontSize: 13,
+    border: "1px solid #d1d5db",
+    background: "#fff",
   },
 };
