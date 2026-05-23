@@ -2,6 +2,7 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../services/api";
 import { AuthContext } from "../context/auth-context";
+import RentalChatPanel from "../components/RentalChatPanel";
 
 const agreementClauses = [
   "The renter confirms the item will be used safely and returned in the same condition, normal wear and tear excepted.",
@@ -305,6 +306,19 @@ function ItemDetails() {
               <div style={styles.detailRow}><span>Tags</span><strong>{Array.isArray(item.tags) && item.tags.length ? item.tags.slice(0, 3).join(", ") : "--"}</strong></div>
               <div style={styles.detailRow}><span>Status</span><strong>{item.isAvailable ? "Available" : "Unavailable"}</strong></div>
             </section>
+
+            <section style={styles.chatSideCard}>
+              <div style={styles.chatSideHeader}>
+                <h2 style={styles.chatInitialTitle}>Chat with Owner</h2>
+                <p style={styles.chatInitialHint}>Ask questions about the item before booking. The owner can respond even before you submit the rental request.</p>
+              </div>
+              <RentalChatPanel 
+                itemId={id}
+                title="Pre-booking inquiry"
+                hint="Ask the owner any questions about the item, availability, or rental details."
+                compact
+              />
+            </section>
           </aside>
         </div>
       </div>
@@ -435,8 +449,9 @@ const styles = {
   columns: {
     marginTop: 18,
     display: "grid",
-    gridTemplateColumns: "1.2fr 0.55fr",
+    gridTemplateColumns: "1.15fr 0.75fr",
     gap: 18,
+    alignItems: "start",
   },
   leftColumn: {
     display: "flex",
@@ -447,6 +462,8 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: 18,
+    alignItems: "stretch",
+    height: "100%",
   },
   sectionCard: {
     borderRadius: 20,
@@ -633,6 +650,21 @@ const styles = {
     border: "1px solid rgba(203,213,225,0.9)",
     boxShadow: "0 14px 28px rgba(15,23,42,0.08)",
   },
+  chatSideCard: {
+    flex: 1,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
+    borderRadius: 20,
+    padding: 18,
+    background: "linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.97) 100%)",
+    border: "1px solid rgba(51,65,85,0.9)",
+    boxShadow: "0 18px 34px rgba(15,23,42,0.18)",
+    color: "#fff",
+  },
+  chatSideHeader: {
+    marginBottom: 10,
+  },
   sideTitle: {
     margin: "0 0 12px",
     color: "#0f172a",
@@ -669,5 +701,22 @@ const styles = {
   error: {
     padding: 20,
     color: "#991b1b",
+  },
+  chatInitialSection: {
+    marginTop: 0,
+    paddingTop: 0,
+    borderTop: "none",
+  },
+  chatInitialTitle: {
+    margin: "0 0 8px 0",
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: 700,
+  },
+  chatInitialHint: {
+    margin: "0 0 16px 0",
+    color: "#cbd5e1",
+    fontSize: 14,
+    lineHeight: 1.5,
   },
 };

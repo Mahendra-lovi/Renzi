@@ -111,87 +111,87 @@ function AgreementActionModal({
         {error ? <p style={styles.error}>{error}</p> : null}
 
         {agreement ? (
-          <>
-            <div style={styles.summaryGrid}>
-              <div style={styles.summaryCard}>
-                <span style={styles.label}>Item</span>
-                <strong style={styles.value}>{agreement.item?.title || "Item"}</strong>
-              </div>
-              <div style={styles.summaryCard}>
-                <span style={styles.label}>Status</span>
-                <strong style={styles.value}>{agreement.status}</strong>
-              </div>
-              <div style={styles.summaryCard}>
-                <span style={styles.label}>Owner Signature</span>
-                <strong style={styles.value}>{agreement.ownerSigned ? "Signed" : "Pending"}</strong>
-              </div>
-              <div style={styles.summaryCard}>
-                <span style={styles.label}>Renter Signature</span>
-                <strong style={styles.value}>{agreement.renterSigned ? "Signed" : "Pending"}</strong>
-              </div>
-            </div>
-
-            <div style={styles.partyBox}>
-              <p style={styles.partyLine}>
-                <strong>Owner:</strong> {agreement.owner?.name || agreement.owner?.email || "Owner"} ({agreement.owner?.email || "N/A"})
-              </p>
-              <p style={styles.partyLine}>
-                <strong>Renter:</strong> {agreement.renter?.name || agreement.renter?.email || "Renter"} ({agreement.renter?.email || "N/A"})
-              </p>
-              <p style={styles.partyLine}>
-                <strong>Period:</strong> {new Date(agreement.startDate).toDateString()} to {new Date(agreement.endDate).toDateString()}
-              </p>
-              <p style={styles.partyLine}>
-                <strong>Total:</strong> INR {agreement.totalPrice}
-              </p>
-            </div>
-
-            <div style={styles.termsBox}>
-              <strong style={styles.termsTitle}>Agreement text</strong>
-              <p style={styles.termsText}>{agreement.content}</p>
-            </div>
-
-            <button type="button" style={styles.pdfButton} onClick={handleDownloadPdf}>
-              Download Legal PDF
-            </button>
-
-            {actionType !== "view" ? (
-              step === 1 ? (
-                <div style={styles.stepBox}>
-                  <h3 style={styles.stepTitle}>Step 1: Opened successfully</h3>
-                  <p style={styles.stepText}>
-                    The agreement is now open. Click Continue to view what the next action will do before final confirmation.
-                  </p>
-                  <div style={styles.actions}>
-                    <button type="button" style={styles.cancelBtn} onClick={onClose}>Close</button>
-                    <button type="button" style={styles.primaryBtn} onClick={() => setStep(2)}>Continue</button>
-                  </div>
+          <section style={styles.mainContent}>
+              <div style={styles.summaryGrid}>
+                <div style={styles.summaryCard}>
+                  <span style={styles.label}>Item</span>
+                  <strong style={styles.value}>{agreement.item?.title || "Item"}</strong>
                 </div>
+                <div style={styles.summaryCard}>
+                  <span style={styles.label}>Status</span>
+                  <strong style={styles.value}>{agreement.status}</strong>
+                </div>
+                <div style={styles.summaryCard}>
+                  <span style={styles.label}>Owner Signature</span>
+                  <strong style={styles.value}>{agreement.ownerSigned ? "Signed" : "Pending"}</strong>
+                </div>
+                <div style={styles.summaryCard}>
+                  <span style={styles.label}>Renter Signature</span>
+                  <strong style={styles.value}>{agreement.renterSigned ? "Signed" : "Pending"}</strong>
+                </div>
+              </div>
+
+              <div style={styles.partyBox}>
+                <p style={styles.partyLine}>
+                  <strong>Owner:</strong> {agreement.owner?.name || agreement.owner?.email || "Owner"} ({agreement.owner?.email || "N/A"})
+                </p>
+                <p style={styles.partyLine}>
+                  <strong>Renter:</strong> {agreement.renter?.name || agreement.renter?.email || "Renter"} ({agreement.renter?.email || "N/A"})
+                </p>
+                <p style={styles.partyLine}>
+                  <strong>Period:</strong> {new Date(agreement.startDate).toDateString()} to {new Date(agreement.endDate).toDateString()}
+                </p>
+                <p style={styles.partyLine}>
+                  <strong>Total:</strong> INR {agreement.totalPrice}
+                </p>
+              </div>
+
+              <div style={styles.termsBox}>
+                <strong style={styles.termsTitle}>Agreement text</strong>
+                <p style={styles.termsText}>{agreement.content}</p>
+              </div>
+
+              <button type="button" style={styles.pdfButton} onClick={handleDownloadPdf}>
+                Download Legal PDF
+              </button>
+
+              {actionType !== "view" ? (
+                step === 1 ? (
+                  <div style={styles.stepBox}>
+                    <h3 style={styles.stepTitle}>Step 1: Opened successfully</h3>
+                    <p style={styles.stepText}>
+                      The agreement is now open. Click Continue to view what the next action will do before final confirmation.
+                    </p>
+                    <div style={styles.actions}>
+                      <button type="button" style={styles.cancelBtn} onClick={onClose}>Close</button>
+                      <button type="button" style={styles.primaryBtn} onClick={() => setStep(2)}>Continue</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={styles.stepBox}>
+                    <h3 style={styles.stepTitle}>Step 2: Action details</h3>
+                    <p style={styles.stepText}><strong>{copy.heading}</strong></p>
+                    <p style={styles.stepText}>{copy.description}</p>
+                    {isActionDisabled ? <p style={styles.error}>{disabledReason || "This action is currently blocked."}</p> : null}
+                    <div style={styles.actions}>
+                      <button type="button" style={styles.cancelBtn} onClick={onClose}>Close</button>
+                      <button
+                        type="button"
+                        style={isActionDisabled ? styles.disabledBtn : styles.primaryBtn}
+                        onClick={handleConfirm}
+                        disabled={isActionDisabled}
+                      >
+                        {copy.buttonLabel}
+                      </button>
+                    </div>
+                  </div>
+                )
               ) : (
-                <div style={styles.stepBox}>
-                  <h3 style={styles.stepTitle}>Step 2: Action details</h3>
-                  <p style={styles.stepText}><strong>{copy.heading}</strong></p>
-                  <p style={styles.stepText}>{copy.description}</p>
-                  {isActionDisabled ? <p style={styles.error}>{disabledReason || "This action is currently blocked."}</p> : null}
-                  <div style={styles.actions}>
-                    <button type="button" style={styles.cancelBtn} onClick={onClose}>Close</button>
-                    <button
-                      type="button"
-                      style={isActionDisabled ? styles.disabledBtn : styles.primaryBtn}
-                      onClick={handleConfirm}
-                      disabled={isActionDisabled}
-                    >
-                      {copy.buttonLabel}
-                    </button>
-                  </div>
+                <div style={styles.actions}>
+                  <button type="button" style={styles.cancelBtn} onClick={onClose}>{copy.buttonLabel}</button>
                 </div>
-              )
-            ) : (
-              <div style={styles.actions}>
-                <button type="button" style={styles.cancelBtn} onClick={onClose}>{copy.buttonLabel}</button>
-              </div>
-            )}
-          </>
+              )}
+            </section>
         ) : null}
       </div>
     </div>
@@ -210,7 +210,7 @@ const styles = {
     padding: 16
   },
   modal: {
-    width: "min(780px, 100%)",
+    width: "min(1100px, 100%)",
     maxHeight: "90vh",
     overflowY: "auto",
     background: "#fff",
@@ -218,6 +218,10 @@ const styles = {
     padding: 18,
     border: "1px solid #e5e7eb",
     boxShadow: "0 20px 45px rgba(0,0,0,0.25)"
+  },
+  mainContent: {
+    minWidth: 0,
+    width: "100%"
   },
   title: {
     margin: "0 0 10px",

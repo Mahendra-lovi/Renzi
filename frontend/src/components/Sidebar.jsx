@@ -37,6 +37,7 @@ function Sidebar({ open, onClose }) {
         <div style={styles.content}>
           <button style={styles.link} onClick={() => go("/")}>Home</button>
           <button style={styles.link} onClick={() => go("/add-item")}>Add Listing</button>
+          <button style={styles.link} onClick={() => go("/chats")}>Chats</button>
           <button style={styles.link} onClick={() => go("/my-listings")}>My Listings</button>
           <button style={styles.link} onClick={() => go("/my-rentals")}>My Rentals</button>
           <button style={styles.link} onClick={() => go("/owner-requests")}>Rental Requests</button>

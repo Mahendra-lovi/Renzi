@@ -1,5 +1,26 @@
 const mongoose = require("mongoose");
 
+const rentalChatMessageSchema = new mongoose.Schema(
+  {
+    sender: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
+    message: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 1000
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  { _id: true }
+);
+
 const rentalSchema = new mongoose.Schema(
   {
     item: {
@@ -114,6 +135,11 @@ const rentalSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null
+    },
+
+    chatMessages: {
+      type: [rentalChatMessageSchema],
+      default: []
     }
   },
   { timestamps: true }

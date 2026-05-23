@@ -1,6 +1,9 @@
 const Item = require("../models/Item");
 const Rental = require("../models/Rental"); // we’ll create model soon
 const User = require("../models/User");
+const Conversation = require("../models/Conversation");
+
+const MAX_CHAT_MESSAGES = 200;
 
 const escapeRegex = (value = "") =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -51,6 +54,48 @@ const isValidImageSource = (value = "") => {
 };
 
 const normalizeCity = (value = "") => String(value).trim().toLowerCase();
+
+const formatConversationPayload = (conversation, viewerId) => {
+  const messages = (conversation.messages || []).map((entry) => {
+    const sender = entry.sender || {};
+    return {
+      _id: entry._id,
+      message: entry.message,
+      createdAt: entry.createdAt,
+      sender: {
+        _id: sender._id,
+        name: sender.name || "",
+        email: sender.email || "",
+        role: sender.role || "user"
+      },
+      isMine: sender._id ? sender._id.toString() === viewerId : false
+    };
+  });
+
+  const owner = conversation.owner || {};
+  const renter = conversation.renter || {};
+
+  return {
+    threadId: conversation._id,
+    itemId: conversation.item,
+    rentalId: conversation.rental || null,
+    participants: {
+      owner: {
+        _id: owner._id,
+        name: owner.name || "",
+        email: owner.email || "",
+        role: owner.role || "user"
+      },
+      renter: {
+        _id: renter._id,
+        name: renter.name || "",
+        email: renter.email || "",
+        role: renter.role || "user"
+      }
+    },
+    messages
+  };
+};
 
 /**
  * CREATE ITEM
@@ -255,6 +300,117 @@ exports.getItemById = async (req, res) => {
     }
 
     res.json(item);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getItemChatThread = async (req, res) => {
+  try {
+    const item = await Item.findById(req.params.id).populate("owner", "name email role");
+    if (!item) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    const ownerId = item.owner?._id?.toString();
+    if (!ownerId) {
+      return res.status(400).json({ message: "Item owner not found" });
+    }
+
+    if (ownerId === req.user.id) {
+      return res.status(400).json({ message: "Owner cannot open this client-owner chat from item page" });
+    }
+
+    const conversation = await Conversation.findOneAndUpdate(
+      {
+        item: item._id,
+        owner: ownerId,
+        renter: req.user.id
+      },
+      {
+        $setOnInsert: {
+          item: item._id,
+          owner: ownerId,
+          renter: req.user.id,
+          lastMessageAt: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    )
+      .populate("owner", "name email role")
+      .populate("renter", "name email role")
+      .populate("messages.sender", "name email role");
+
+    res.json(formatConversationPayload(conversation, req.user.id));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.sendItemChatMessage = async (req, res) => {
+  try {
+    const item = await Item.findById(req.params.id).populate("owner", "name email role");
+    if (!item) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    const ownerId = item.owner?._id?.toString();
+    if (!ownerId) {
+      return res.status(400).json({ message: "Item owner not found" });
+    }
+
+    if (ownerId === req.user.id) {
+      return res.status(400).json({ message: "Owner cannot send client-owner chat from item page" });
+    }
+
+    const messageText = String(req.body?.message || "").trim();
+    if (!messageText) {
+      return res.status(400).json({ message: "Message is required" });
+    }
+
+    if (messageText.length > 1000) {
+      return res.status(400).json({ message: "Message must be under 1000 characters" });
+    }
+
+    const conversation = await Conversation.findOneAndUpdate(
+      {
+        item: item._id,
+        owner: ownerId,
+        renter: req.user.id
+      },
+      {
+        $setOnInsert: {
+          item: item._id,
+          owner: ownerId,
+          renter: req.user.id,
+          lastMessageAt: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    conversation.messages.push({
+      sender: req.user.id,
+      message: messageText,
+      createdAt: new Date()
+    });
+
+    if (conversation.messages.length > MAX_CHAT_MESSAGES) {
+      conversation.messages = conversation.messages.slice(-MAX_CHAT_MESSAGES);
+    }
+
+    conversation.lastMessageAt = new Date();
+    await conversation.save();
+
+    const hydrated = await Conversation.findById(conversation._id)
+      .populate("owner", "name email role")
+      .populate("renter", "name email role")
+      .populate("messages.sender", "name email role");
+
+    res.status(201).json({
+      message: "Chat message sent",
+      chat: formatConversationPayload(hydrated, req.user.id)
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import AgreementActionModal from "../components/AgreementActionModal";
+import RentalChatPanel from "../components/RentalChatPanel";
 import api from "../services/api";
 
 function MyRentals() {
@@ -215,57 +216,55 @@ function MyRentals() {
               <button style={styles.closeBtn} onClick={closeRentalDetails}>Close</button>
             </div>
 
-            <img
-              src={selectedRental.item?.images?.[0] || "https://via.placeholder.com/640x360"}
-              style={styles.detailsImage}
-              alt={selectedRental.item?.title || "Rental item"}
-            />
+            <div style={styles.detailsContent}>
+              <div style={styles.detailsLeft}>
+                <img
+                  src={selectedRental.item?.images?.[0] || "https://via.placeholder.com/640x360"}
+                  style={styles.detailsImage}
+                  alt={selectedRental.item?.title || "Rental item"}
+                />
 
-            <div style={styles.detailGrid}>
-              <p><strong>Status:</strong> {selectedRental.status}</p>
-              <p><strong>Price:</strong> INR {selectedRental.item?.pricePerDay}/day</p>
-              <p><strong>Start:</strong> {new Date(selectedRental.startDate).toDateString()}</p>
-              <p><strong>End:</strong> {new Date(selectedRental.endDate).toDateString()}</p>
-              <p><strong>Purpose:</strong> {selectedRental.purpose || "Not set"}</p>
-              <p><strong>Pickup:</strong> {selectedRental.pickupPreference || "Not set"}</p>
-            </div>
+                <div style={styles.detailGrid}>
+                  <p><strong>Status:</strong> {selectedRental.status}</p>
+                  <p><strong>Price:</strong> INR {selectedRental.item?.pricePerDay}/day</p>
+                  <p><strong>Start:</strong> {new Date(selectedRental.startDate).toDateString()}</p>
+                  <p><strong>End:</strong> {new Date(selectedRental.endDate).toDateString()}</p>
+                  <p><strong>Purpose:</strong> {selectedRental.purpose || "Not set"}</p>
+                  <p><strong>Pickup:</strong> {selectedRental.pickupPreference || "Not set"}</p>
+                </div>
 
-            {selectedRental.agreement ? (
-              <p style={styles.agreementMeta}>
-                Agreement: {selectedRental.agreement.status} | Owner signed: {selectedRental.agreement.ownerSigned ? "Yes" : "No"} | You signed: {selectedRental.agreement.renterSigned ? "Yes" : "No"}
-              </p>
-            ) : null}
+                {selectedRental.agreement ? (
+                  <p style={styles.agreementMeta}>
+                    Agreement: {selectedRental.agreement.status} | Owner signed: {selectedRental.agreement.ownerSigned ? "Yes" : "No"} | You signed: {selectedRental.agreement.renterSigned ? "Yes" : "No"}
+                  </p>
+                ) : null}
 
-            <div style={styles.actions}>
-              {selectedRental.agreement && (
-                <button style={styles.buttonOutline} onClick={() => openAgreementModal(selectedRental._id, "view")}>
-                  Open Agreement
-                </button>
-              )}
+                <div style={styles.actions}>
+                  {selectedRental.agreement && (
+                    <button style={styles.buttonOutline} onClick={() => openAgreementModal(selectedRental._id, "view")}>
+                      Open Agreement
+                    </button>
+                  )}
 
-              {selectedRental.status === "approved" && selectedRental.agreement && !selectedRental.agreement.renterSigned && (
-                <button style={styles.buttonMuted} onClick={() => openAgreementModal(selectedRental._id, "sign-renter")}>
-                  Sign Agreement (2-step)
-                </button>
-              )}
+                  {selectedRental.status === "approved" && selectedRental.agreement && !selectedRental.agreement.renterSigned && (
+                    <button style={styles.buttonMuted} onClick={() => openAgreementModal(selectedRental._id, "sign-renter")}>
+                      Sign Agreement (2-step)
+                    </button>
+                  )}
 
-              {selectedRental.status === "active" && (
-                <button style={styles.buttonPrimary} onClick={() => returnItem(selectedRental._id)}>
-                  Return Item
-                </button>
-              )}
+                  {selectedRental.status === "active" && (
+                    <button style={styles.buttonPrimary} onClick={() => returnItem(selectedRental._id)}>
+                      Return Item
+                    </button>
+                  )}
 
-              {["requested", "approved"].includes(selectedRental.status) && (
-                <button style={styles.buttonDanger} onClick={() => cancelRental(selectedRental._id)}>
-                  Cancel Rental
-                </button>
-              )}
-
-              {["approved", "active"].includes(selectedRental.status) && (
-                <button style={styles.buttonDanger} onClick={() => openReportForm(selectedRental._id)}>
-                  Report Issue
-                </button>
-              )}
+                  {["requested", "approved"].includes(selectedRental.status) && (
+                    <button style={styles.buttonDanger} onClick={() => cancelRental(selectedRental._id)}>
+                      Cancel Rental
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -405,9 +404,13 @@ const styles = {
     textTransform: "capitalize",
   },
   agreementMeta: {
-    marginTop: 10,
-    color: "#4b5563",
-    fontSize: 13,
+    fontSize: 12,
+    color: "#64748b",
+    lineHeight: 1.5,
+    padding: "10px 12px",
+    background: "#f0f9ff",
+    borderRadius: 8,
+    border: "1px solid #bfdbfe",
   },
   bookingMetaBox: {
     marginTop: 10,
@@ -422,10 +425,11 @@ const styles = {
     fontSize: 13,
   },
   actions: {
-    marginTop: 10,
     display: "flex",
-    gap: 8,
+    gap: 6,
     flexWrap: "wrap",
+    marginTop: "auto",
+    paddingTop: 10,
   },
   cardHint: {
     marginTop: 10,
@@ -476,47 +480,77 @@ const styles = {
     padding: 16
   },
   detailsModal: {
-    width: "min(760px, 100%)",
+    width: "min(700px, 95vw)",
     maxHeight: "90vh",
-    overflowY: "auto",
     background: "#fff",
     borderRadius: 12,
     border: "1px solid #d1d5db",
     boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
-    padding: 18
+    display: "flex",
+    flexDirection: "column",
   },
   detailsHeader: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    marginBottom: 12
+    padding: "16px 18px",
+    borderBottom: "1px solid #e5e7eb",
+    background: "rgba(248,250,252,0.95)",
+    flexShrink: 0,
   },
   detailsTitle: {
     margin: 0,
-    color: "#111827"
+    color: "#111827",
+    fontSize: 20,
+    fontWeight: 700,
   },
   closeBtn: {
-    border: "1px solid #d1d5db",
-    background: "#fff",
-    color: "#374151",
+    border: "none",
+    background: "transparent",
+    color: "#6b7280",
     borderRadius: 6,
-    padding: "7px 10px",
-    cursor: "pointer"
+    padding: "6px 8px",
+    cursor: "pointer",
+    fontSize: 16,
+    fontWeight: 600,
+  },
+  detailsContent: {
+    padding: 16,
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+  },
+  detailsLeft: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  detailsRight: {
+    display: "none",
   },
   detailsImage: {
     width: "100%",
-    height: 250,
+    height: 240,
     objectFit: "cover",
     borderRadius: 10,
     border: "1px solid #d1d5db"
   },
   detailGrid: {
-    marginTop: 12,
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-    gap: 8,
-    color: "#374151"
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: 12,
+    fontSize: 13,
+    color: "#374151",
+    padding: "12px 0",
+  },
+  chatTitle: {
+    margin: 0,
+    fontSize: 16,
+    fontWeight: 700,
+    color: "#1f2937",
+    paddingBottom: 10,
+    borderBottom: "1px solid #e5e7eb",
   },
   message: {
     marginTop: 10,

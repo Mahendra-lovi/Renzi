@@ -3,10 +3,12 @@ const Item = require("../models/Item");
 const User = require("../models/User");
 const Agreement = require("../models/Agreement");
 const CaseFile = require("../models/CaseFile");
+const Conversation = require("../models/Conversation");
 const PDFDocument = require("pdfkit");
 
 const TRUST_MIN = 0;
 const TRUST_MAX = 100;
+const MAX_CHAT_MESSAGES = 200;
 
 const clampTrust = (value) => Math.max(TRUST_MIN, Math.min(TRUST_MAX, value));
 
@@ -126,6 +128,106 @@ const createCaseFileForDispute = async ({
   });
 };
 
+const getAuthorizedRentalParticipant = async (rentalId, userId) => {
+  const rental = await Rental.findById(rentalId);
+  if (!rental) {
+    return { status: 404, message: "Rental not found" };
+  }
+
+  const isOwner = rental.owner.toString() === userId;
+  const isRenter = rental.renter.toString() === userId;
+
+  if (!isOwner && !isRenter) {
+    return { status: 403, message: "Not allowed to access this rental chat" };
+  }
+
+  return { rental, isOwner, isRenter };
+};
+
+const resolveConversationForRental = async (rental) => {
+  let conversation = await Conversation.findOne({
+    item: rental.item,
+    owner: rental.owner,
+    renter: rental.renter
+  });
+
+  if (!conversation) {
+    conversation = await Conversation.create({
+      item: rental.item,
+      owner: rental.owner,
+      renter: rental.renter,
+      rental: rental._id,
+      messages: [],
+      lastMessageAt: new Date()
+    });
+  }
+
+  if (!conversation.rental) {
+    conversation.rental = rental._id;
+  }
+
+  if (
+    conversation.messages.length === 0 &&
+    Array.isArray(rental.chatMessages) &&
+    rental.chatMessages.length > 0
+  ) {
+    conversation.messages = rental.chatMessages
+      .slice(-MAX_CHAT_MESSAGES)
+      .map((entry) => ({
+        sender: entry.sender,
+        message: entry.message,
+        createdAt: entry.createdAt || new Date()
+      }));
+    conversation.lastMessageAt = conversation.messages[conversation.messages.length - 1]?.createdAt || new Date();
+  }
+
+  await conversation.save();
+
+  return conversation;
+};
+
+const formatChatPayload = (conversation, viewerId) => {
+  const messages = (conversation.messages || []).map((entry) => {
+    const sender = entry.sender || {};
+    return {
+      _id: entry._id,
+      message: entry.message,
+      createdAt: entry.createdAt,
+      sender: {
+        _id: sender._id,
+        name: sender.name || "",
+        email: sender.email || "",
+        role: sender.role || "user"
+      },
+      isMine: sender._id ? sender._id.toString() === viewerId : false
+    };
+  });
+
+  const owner = conversation.owner || {};
+  const renter = conversation.renter || {};
+
+  return {
+    threadId: conversation._id,
+    rentalId: conversation.rental || null,
+    itemId: conversation.item,
+    participants: {
+      owner: {
+        _id: owner._id,
+        name: owner.name || "",
+        email: owner.email || "",
+        role: owner.role || "user"
+      },
+      renter: {
+        _id: renter._id,
+        name: renter.name || "",
+        email: renter.email || "",
+        role: renter.role || "user"
+      }
+    },
+    messages
+  };
+};
+
 /**
  * REQUEST RENTAL
  * Any logged-in user (except owner) can request
@@ -196,6 +298,26 @@ exports.requestRental = async (req, res) => {
       signatureName: String(signatureName || "").trim(),
       agreementAcceptedAt: agreementAccepted ? new Date() : null
     });
+
+    await Conversation.findOneAndUpdate(
+      {
+        item: item._id,
+        owner: item.owner,
+        renter: req.user.id
+      },
+      {
+        $setOnInsert: {
+          item: item._id,
+          owner: item.owner,
+          renter: req.user.id,
+          lastMessageAt: new Date()
+        },
+        $set: {
+          rental: rental._id
+        }
+      },
+      { upsert: true, new: true }
+    );
 
     res.status(201).json({
       message: "Rental request sent",
@@ -468,6 +590,70 @@ exports.getRentalAgreementPdf = async (req, res) => {
     if (!res.headersSent) {
       res.status(500).json({ message: error.message });
     }
+  }
+};
+
+exports.getRentalChat = async (req, res) => {
+  try {
+    const access = await getAuthorizedRentalParticipant(req.params.id, req.user.id);
+    if (access.status) {
+      return res.status(access.status).json({ message: access.message });
+    }
+
+    const baseConversation = await resolveConversationForRental(access.rental);
+    const conversation = await Conversation.findById(baseConversation._id)
+      .populate("owner", "name email role")
+      .populate("renter", "name email role")
+      .populate("messages.sender", "name email role");
+
+    res.json(formatChatPayload(conversation, req.user.id));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.sendRentalChatMessage = async (req, res) => {
+  try {
+    const access = await getAuthorizedRentalParticipant(req.params.id, req.user.id);
+    if (access.status) {
+      return res.status(access.status).json({ message: access.message });
+    }
+
+    const messageText = String(req.body?.message || "").trim();
+    if (!messageText) {
+      return res.status(400).json({ message: "Message is required" });
+    }
+
+    if (messageText.length > 1000) {
+      return res.status(400).json({ message: "Message must be under 1000 characters" });
+    }
+
+    const conversation = await resolveConversationForRental(access.rental);
+
+    conversation.messages.push({
+      sender: req.user.id,
+      message: messageText,
+      createdAt: new Date()
+    });
+
+    if (conversation.messages.length > MAX_CHAT_MESSAGES) {
+      conversation.messages = conversation.messages.slice(-MAX_CHAT_MESSAGES);
+    }
+
+    conversation.lastMessageAt = new Date();
+    await conversation.save();
+
+    const hydrated = await Conversation.findById(conversation._id)
+      .populate("owner", "name email role")
+      .populate("renter", "name email role")
+      .populate("messages.sender", "name email role");
+
+    res.status(201).json({
+      message: "Chat message sent",
+      chat: formatChatPayload(hydrated, req.user.id)
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };
 

@@ -11,6 +11,8 @@ const {
   getOwnerRentals,
   getRentalAgreement,
   getRentalAgreementPdf,
+  getRentalChat,
+  sendRentalChatMessage,
   signOwnerAgreement,
   signRenterAgreement,
   cancelRental,
@@ -30,6 +32,8 @@ router.patch("/dispute/:id", auth, disputeRental);
 router.patch("/report-issue/:id", auth, reportIssue);
 router.get("/:id/agreement", auth, getRentalAgreement);
 router.get("/:id/agreement/pdf", auth, getRentalAgreementPdf);
+router.get("/:id/chat", auth, getRentalChat);
+router.post("/:id/chat", auth, sendRentalChatMessage);
 router.patch("/:id/sign-owner", auth, signOwnerAgreement);
 router.patch("/:id/sign-renter", auth, signRenterAgreement);
 
