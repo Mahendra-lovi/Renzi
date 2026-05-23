@@ -60,9 +60,18 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   };
 
+  const updateUser = (nextUserOrUpdater) => {
+    setUser((prevUser) => {
+      if (typeof nextUserOrUpdater === "function") {
+        return nextUserOrUpdater(prevUser);
+      }
+      return nextUserOrUpdater;
+    });
+  };
+
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, user, loading, login, logout }}
+      value={{ isAuthenticated, user, loading, login, logout, updateUser }}
     >
       {children}
     </AuthContext.Provider>

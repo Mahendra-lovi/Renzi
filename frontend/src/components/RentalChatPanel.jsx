@@ -3,7 +3,8 @@ import api from "../services/api";
 
 function getParticipantLabel(user) {
   if (!user) return "Unknown";
-  return user.name || user.email || "Unknown";
+  const name = String(user.name || "").trim();
+  return name || "User";
 }
 
 function formatTime(value) {
@@ -187,6 +188,7 @@ const styles = {
     flexDirection: "column",
     height: "100%",
     minHeight: 500,
+    overflow: "hidden",
   },
   chatCardCompact: {
     border: "1px solid #d1d5db",
@@ -198,6 +200,7 @@ const styles = {
     height: "100%",
     minHeight: 0,
     flex: 1,
+    overflow: "hidden",
   },
   chatHeader: {
     display: "flex",
@@ -320,22 +323,27 @@ const styles = {
   },
   textarea: {
     width: "100%",
+    boxSizing: "border-box",
     border: "1px solid #d1d5db",
     borderRadius: 8,
     padding: 8,
     fontFamily: "inherit",
     fontSize: 13,
-    resize: "vertical"
+    resize: "none",
+    height: 86,
+    overflowY: "auto"
   },
   textareaCompact: {
     width: "100%",
+    boxSizing: "border-box",
     border: "1px solid #d1d5db",
     borderRadius: 8,
     padding: 7,
     fontFamily: "inherit",
     fontSize: 13,
-    resize: "vertical",
-    minHeight: 78,
+    resize: "none",
+    height: 78,
+    overflowY: "auto"
   },
   composerFooter: {
     marginTop: 6,

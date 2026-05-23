@@ -66,6 +66,7 @@ const formatConversationPayload = (conversation, viewerId) => {
         _id: sender._id,
         name: sender.name || "",
         email: sender.email || "",
+        profileImage: sender.profileImage || "",
         role: sender.role || "user"
       },
       isMine: sender._id ? sender._id.toString() === viewerId : false
@@ -84,12 +85,14 @@ const formatConversationPayload = (conversation, viewerId) => {
         _id: owner._id,
         name: owner.name || "",
         email: owner.email || "",
+        profileImage: owner.profileImage || "",
         role: owner.role || "user"
       },
       renter: {
         _id: renter._id,
         name: renter.name || "",
         email: renter.email || "",
+        profileImage: renter.profileImage || "",
         role: renter.role || "user"
       }
     },
@@ -307,7 +310,7 @@ exports.getItemById = async (req, res) => {
 
 exports.getItemChatThread = async (req, res) => {
   try {
-    const item = await Item.findById(req.params.id).populate("owner", "name email role");
+    const item = await Item.findById(req.params.id).populate("owner", "name email profileImage role");
     if (!item) {
       return res.status(404).json({ message: "Item not found" });
     }
@@ -337,9 +340,12 @@ exports.getItemChatThread = async (req, res) => {
       },
       { upsert: true, new: true }
     )
-      .populate("owner", "name email role")
-      .populate("renter", "name email role")
-      .populate("messages.sender", "name email role");
+      .populate("owner", "name email profileImage role")
+      .populate("renter", "name email profileImage role")
+      .populate("messages.sender", "name email profileImage role");
+
+    conversation.renterLastSeenAt = new Date();
+    await conversation.save();
 
     res.json(formatConversationPayload(conversation, req.user.id));
   } catch (error) {
@@ -349,7 +355,7 @@ exports.getItemChatThread = async (req, res) => {
 
 exports.sendItemChatMessage = async (req, res) => {
   try {
-    const item = await Item.findById(req.params.id).populate("owner", "name email role");
+    const item = await Item.findById(req.params.id).populate("owner", "name email profileImage role");
     if (!item) {
       return res.status(404).json({ message: "Item not found" });
     }
@@ -400,12 +406,13 @@ exports.sendItemChatMessage = async (req, res) => {
     }
 
     conversation.lastMessageAt = new Date();
+    conversation.renterLastSeenAt = new Date();
     await conversation.save();
 
     const hydrated = await Conversation.findById(conversation._id)
-      .populate("owner", "name email role")
-      .populate("renter", "name email role")
-      .populate("messages.sender", "name email role");
+      .populate("owner", "name email profileImage role")
+      .populate("renter", "name email profileImage role")
+      .populate("messages.sender", "name email profileImage role");
 
     res.status(201).json({
       message: "Chat message sent",

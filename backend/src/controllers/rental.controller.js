@@ -197,6 +197,7 @@ const formatChatPayload = (conversation, viewerId) => {
         _id: sender._id,
         name: sender.name || "",
         email: sender.email || "",
+        profileImage: sender.profileImage || "",
         role: sender.role || "user"
       },
       isMine: sender._id ? sender._id.toString() === viewerId : false
@@ -215,17 +216,28 @@ const formatChatPayload = (conversation, viewerId) => {
         _id: owner._id,
         name: owner.name || "",
         email: owner.email || "",
+        profileImage: owner.profileImage || "",
         role: owner.role || "user"
       },
       renter: {
         _id: renter._id,
         name: renter.name || "",
         email: renter.email || "",
+        profileImage: renter.profileImage || "",
         role: renter.role || "user"
       }
     },
     messages
   };
+};
+
+const markConversationSeenByUser = (conversation, userId) => {
+  if (String(conversation.owner) === String(userId)) {
+    conversation.ownerLastSeenAt = new Date();
+  }
+  if (String(conversation.renter) === String(userId)) {
+    conversation.renterLastSeenAt = new Date();
+  }
 };
 
 /**
@@ -601,10 +613,13 @@ exports.getRentalChat = async (req, res) => {
     }
 
     const baseConversation = await resolveConversationForRental(access.rental);
+    markConversationSeenByUser(baseConversation, req.user.id);
+    await baseConversation.save();
+
     const conversation = await Conversation.findById(baseConversation._id)
-      .populate("owner", "name email role")
-      .populate("renter", "name email role")
-      .populate("messages.sender", "name email role");
+      .populate("owner", "name email profileImage role")
+      .populate("renter", "name email profileImage role")
+      .populate("messages.sender", "name email profileImage role");
 
     res.json(formatChatPayload(conversation, req.user.id));
   } catch (error) {
@@ -641,12 +656,13 @@ exports.sendRentalChatMessage = async (req, res) => {
     }
 
     conversation.lastMessageAt = new Date();
+    markConversationSeenByUser(conversation, req.user.id);
     await conversation.save();
 
     const hydrated = await Conversation.findById(conversation._id)
-      .populate("owner", "name email role")
-      .populate("renter", "name email role")
-      .populate("messages.sender", "name email role");
+      .populate("owner", "name email profileImage role")
+      .populate("renter", "name email profileImage role")
+      .populate("messages.sender", "name email profileImage role");
 
     res.status(201).json({
       message: "Chat message sent",

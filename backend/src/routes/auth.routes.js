@@ -9,7 +9,8 @@ const {
   resendForgotPasswordOtp,
   resetPasswordWithOtp,
   loginUser,
-  googleSignIn
+  googleSignIn,
+  updateProfilePhoto
 } = require("../controllers/auth.controller");
 
 const authMiddleware = require("../middleware/auth.middleware");
@@ -46,5 +47,7 @@ router.get("/me", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+router.patch("/profile-photo", authMiddleware, updateProfilePhoto);
 
 module.exports = router;

@@ -50,6 +50,14 @@ const conversationSchema = new mongoose.Schema(
     lastMessageAt: {
       type: Date,
       default: Date.now
+    },
+    ownerLastSeenAt: {
+      type: Date,
+      default: null
+    },
+    renterLastSeenAt: {
+      type: Date,
+      default: null
     }
   },
   { timestamps: true }
