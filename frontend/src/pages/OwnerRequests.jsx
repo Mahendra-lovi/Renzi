@@ -136,11 +136,90 @@ function OwnerRequests() {
     }
   };
 
+  const confirmAdvanceCash = async (id) => {
+    try {
+      setMessage("");
+      const confirmed = window.confirm("Confirm that you received the renter's advance cash payment?");
+      if (!confirmed) return;
+
+      const res = await api.patch(`/rentals/${id}/confirm-advance-cash`);
+      updateRentalInState(id, (r) => ({ ...r, ...res.data.rental }));
+      setMessage(res.data.message || "Advance cash payment confirmed");
+    } catch (err) {
+      setMessage(err.response?.data?.message || "Failed to confirm advance cash payment");
+    }
+  };
+
+  const confirmFinalCash = async (id) => {
+    try {
+      setMessage("");
+      const confirmed = window.confirm("Confirm that you received the renter's final cash settlement?");
+      if (!confirmed) return;
+
+      const res = await api.patch(`/rentals/${id}/confirm-final-cash`);
+      updateRentalInState(id, (r) => ({ ...r, ...res.data.rental }));
+      setMessage(res.data.message || "Final cash settlement confirmed");
+    } catch (err) {
+      setMessage(err.response?.data?.message || "Failed to confirm final cash settlement");
+    }
+  };
+
+  const getPaymentState = (rental) => {
+    const payment = rental.payment || {};
+    const advance = payment.advance || {};
+    const final = payment.final || {};
+    const total = Number(rental.totalPrice || 0);
+    const fallbackAdvance = Math.round((total * 25) / 100);
+    const fallbackFinal = Math.max(total - fallbackAdvance, 0);
+    return {
+      advanceAmount: Number(payment.advanceAmount ?? fallbackAdvance),
+      finalAmount: Number(payment.finalAmount ?? fallbackFinal),
+      advanceStatus: advance.status || "pending",
+      advanceMethod: advance.method || "none",
+      finalStatus: final.status || "not_due",
+      finalMethod: final.method || "none"
+    };
+  };
+
+  const formatStageLabel = (status) => {
+    switch (status) {
+      case "paid":
+        return "Paid";
+      case "pending_confirmation":
+        return "Waiting your confirmation";
+      case "not_due":
+        return "Not due yet";
+      default:
+        return "Pending";
+    }
+  };
+
+  const formatDateTime = (value) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleString();
+  };
+
+  const downloadReceipt = (receipt) => {
+    const fallbackId = String(receipt.paidAt || "receipt").replace(/[^a-zA-Z0-9]/g, "-");
+    const filename = `renzi-receipt-${receipt.stage}-${receipt._id || fallbackId}.json`;
+    const blob = new Blob([JSON.stringify(receipt, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>Rental Requests (My Items)</h1>
       <p style={styles.subTitle}>
-        Agreement actions are now guided in two steps: open first, then confirm after reading action impact.
+        Rental Terms actions are guided in two steps: open first, then confirm after reading action impact.
       </p>
       {message && <p style={styles.message}>{message}</p>}
 
@@ -159,9 +238,65 @@ function OwnerRequests() {
             <p style={styles.meta}>Status: {rental.status}</p>
             {rental.agreement && (
               <p style={styles.agreementMeta}>
-                Agreement: {rental.agreement.status} | Owner signed: {rental.agreement.ownerSigned ? "Yes" : "No"} | Renter signed: {rental.agreement.renterSigned ? "Yes" : "No"}
+                Rental Terms: {rental.agreement.status} | Owner signed: {rental.agreement.ownerSigned ? "Yes" : "No"} | Renter signed: {rental.agreement.renterSigned ? "Yes" : "No"}
               </p>
             )}
+            {(() => {
+              const payment = getPaymentState(rental);
+              const receipts = rental.payment?.receipts || [];
+              const timeline = rental.payment?.timeline || [];
+              return (
+                <>
+                  <div style={styles.paymentBox}>
+                    <p style={styles.paymentLine}>
+                      <strong>Advance:</strong> INR {payment.advanceAmount} ({formatStageLabel(payment.advanceStatus)})
+                    </p>
+                    <p style={styles.paymentLine}>Method: {payment.advanceMethod}</p>
+                    <p style={styles.paymentLine}>
+                      <strong>Final:</strong> INR {payment.finalAmount} ({formatStageLabel(payment.finalStatus)})
+                    </p>
+                    <p style={styles.paymentLine}>Method: {payment.finalMethod}</p>
+                  </div>
+
+                  <div style={styles.timelineBox}>
+                    <p style={styles.panelTitle}>Receipts</p>
+                    {receipts.length === 0 ? (
+                      <p style={styles.paymentLine}>No receipts yet.</p>
+                    ) : (
+                      <div style={styles.timelineList}>
+                        {receipts.map((receipt) => (
+                          <div key={receipt._id || `${receipt.stage}-${receipt.paidAt}`} style={styles.timelineItem}>
+                            <p style={styles.paymentLine}><strong>{receipt.stage === "advance" ? "Advance" : "Final"}</strong> • INR {receipt.amount}</p>
+                            <p style={styles.paymentLine}>Method: {receipt.method} • Status: {receipt.status}</p>
+                            <p style={styles.paymentLine}>Paid At: {formatDateTime(receipt.paidAt)}</p>
+                            <button style={styles.openBtn} onClick={() => downloadReceipt(receipt)}>
+                              Download Receipt JSON
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <p style={{ ...styles.panelTitle, marginTop: 10 }}>Transaction Timeline</p>
+                    {timeline.length === 0 ? (
+                      <p style={styles.paymentLine}>No payment events yet.</p>
+                    ) : (
+                      <div style={styles.timelineList}>
+                        {timeline.map((event) => (
+                          <div key={event._id || `${event.event}-${event.createdAt}`} style={styles.timelineItem}>
+                            <p style={styles.paymentLine}><strong>{event.event}</strong></p>
+                            <p style={styles.paymentLine}>
+                              Stage: {event.stage || "-"} • Method: {event.method || "-"} • Amount: INR {Number(event.amount || 0)}
+                            </p>
+                            <p style={styles.paymentLine}>Time: {formatDateTime(event.createdAt)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
 
             <div style={styles.actions}>
               {rental.status === "requested" && (
@@ -172,15 +307,25 @@ function OwnerRequests() {
 
               {rental.agreement && (
                 <button style={styles.openBtn} onClick={() => openAgreementModal(rental._id, "view")}>
-                  Open Agreement
+                  Open Rental Terms
                 </button>
               )}
 
               {rental.status === "approved" && rental.agreement && !rental.agreement.ownerSigned && (
                 <button style={styles.signBtn} onClick={() => openAgreementModal(rental._id, "sign-owner")}>
-                  Sign Agreement (2-step)
+                  Sign Rental Terms (2-step)
                 </button>
               )}
+
+              {(() => {
+                const payment = getPaymentState(rental);
+                if (payment.advanceStatus !== "pending_confirmation" || payment.advanceMethod !== "cash") return null;
+                return (
+                  <button style={styles.confirmCashBtn} onClick={() => confirmAdvanceCash(rental._id)}>
+                    Confirm Advance Cash
+                  </button>
+                );
+              })()}
 
               {rental.status === "approved" && (
                 <button
@@ -190,6 +335,16 @@ function OwnerRequests() {
                   Activate Rental (2-step)
                 </button>
               )}
+
+              {(() => {
+                const payment = getPaymentState(rental);
+                if (payment.finalStatus !== "pending_confirmation" || payment.finalMethod !== "cash") return null;
+                return (
+                  <button style={styles.confirmCashBtn} onClick={() => confirmFinalCash(rental._id)}>
+                    Confirm Final Cash
+                  </button>
+                );
+              })()}
 
               {["active"].includes(rental.status) && (
                 <button style={styles.reportBtn} onClick={() => openReportForm(rental._id)}>
@@ -211,10 +366,11 @@ function OwnerRequests() {
           agreementModal.actionType === "activate" &&
           (
             !rentals.find((r) => r._id === agreementModal.rentalId)?.agreement?.ownerSigned ||
-            !rentals.find((r) => r._id === agreementModal.rentalId)?.agreement?.renterSigned
+            !rentals.find((r) => r._id === agreementModal.rentalId)?.agreement?.renterSigned ||
+            rentals.find((r) => r._id === agreementModal.rentalId)?.payment?.advance?.status !== "paid"
           )
         }
-        disabledReason="Activation requires both signatures. Ask renter to sign first if pending."
+        disabledReason="Activation requires both signatures and completed advance payment."
       />
 
       {reportingRentalId && (
@@ -374,6 +530,14 @@ const styles = {
     borderRadius: 6,
     cursor: "pointer",
   },
+  confirmCashBtn: {
+    background: "#0f766e",
+    color: "#fff",
+    border: "none",
+    padding: "8px 10px",
+    borderRadius: 6,
+    cursor: "pointer",
+  },
   reportBtn: {
     background: "#991b1b",
     color: "#fff",
@@ -393,6 +557,44 @@ const styles = {
   agreementMeta: {
     color: "#4b5563",
     fontSize: 13,
+  },
+  paymentBox: {
+    marginTop: 8,
+    padding: "10px 12px",
+    borderRadius: 8,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  paymentLine: {
+    margin: "4px 0",
+    color: "#334155",
+    fontSize: 13,
+  },
+  timelineBox: {
+    marginTop: 8,
+    padding: "10px 12px",
+    borderRadius: 8,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+  panelTitle: {
+    margin: "0 0 6px",
+    color: "#0f172a",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  timelineList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    maxHeight: 180,
+    overflowY: "auto",
+  },
+  timelineItem: {
+    padding: "8px 10px",
+    borderRadius: 8,
+    border: "1px solid #e5e7eb",
+    background: "#f8fafc",
   },
   modalOverlay: {
     position: "fixed",

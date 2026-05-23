@@ -1,12 +1,34 @@
 import { useEffect, useState } from "react";
 import AgreementActionModal from "../components/AgreementActionModal";
-import RentalChatPanel from "../components/RentalChatPanel";
 import api from "../services/api";
+
+const loadRazorpayScript = () => new Promise((resolve) => {
+  if (window.Razorpay) {
+    resolve(true);
+    return;
+  }
+
+  const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+  if (existingScript) {
+    existingScript.addEventListener("load", () => resolve(true));
+    existingScript.addEventListener("error", () => resolve(false));
+    return;
+  }
+
+  const script = document.createElement("script");
+  script.src = "https://checkout.razorpay.com/v1/checkout.js";
+  script.async = true;
+  script.onload = () => resolve(true);
+  script.onerror = () => resolve(false);
+  document.body.appendChild(script);
+});
 
 function MyRentals() {
   const [rentals, setRentals] = useState([]);
   const [message, setMessage] = useState("");
   const [selectedRental, setSelectedRental] = useState(null);
+  const [paymentHistory, setPaymentHistory] = useState({ receipts: [], timeline: [] });
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
   const [reportingRentalId, setReportingRentalId] = useState(null);
   const [reportForm, setReportForm] = useState({
     incidentType: "other",
@@ -40,11 +62,28 @@ function MyRentals() {
 
   const openRentalDetails = (rental) => {
     setSelectedRental(rental);
+    fetchPaymentHistory(rental._id);
     setMessage("");
   };
 
   const closeRentalDetails = () => {
     setSelectedRental(null);
+    setPaymentHistory({ receipts: [], timeline: [] });
+  };
+
+  const fetchPaymentHistory = async (rentalId) => {
+    try {
+      setPaymentHistoryLoading(true);
+      const res = await api.get(`/rentals/${rentalId}/payment-history`);
+      setPaymentHistory({
+        receipts: Array.isArray(res.data?.receipts) ? res.data.receipts : [],
+        timeline: Array.isArray(res.data?.timeline) ? res.data.timeline : []
+      });
+    } catch {
+      setPaymentHistory({ receipts: [], timeline: [] });
+    } finally {
+      setPaymentHistoryLoading(false);
+    }
   };
 
   const returnItem = async (id) => {
@@ -150,6 +189,147 @@ function MyRentals() {
     }
   };
 
+  const payAdvance = async (id, method) => {
+    try {
+      setMessage("");
+      const actionLabel = method === "cash" ? "manual cash" : "site payment";
+      const confirmed = window.confirm(`Proceed with advance payment via ${actionLabel}?`);
+      if (!confirmed) return;
+
+      const res = await api.patch(`/rentals/${id}/pay-advance`, { method });
+      updateRentalInState(id, (r) => ({ ...r, ...res.data.rental }));
+      await fetchPaymentHistory(id);
+      setMessage(res.data.message || "Advance payment updated");
+    } catch (err) {
+      setMessage(err.response?.data?.message || "Failed to update advance payment");
+    }
+  };
+
+  const payFinalSettlement = async (id, method) => {
+    try {
+      setMessage("");
+      const actionLabel = method === "cash" ? "manual cash" : "site payment";
+      const confirmed = window.confirm(`Proceed with final settlement via ${actionLabel}?`);
+      if (!confirmed) return;
+
+      const res = await api.patch(`/rentals/${id}/pay-final`, { method });
+      updateRentalInState(id, (r) => ({ ...r, ...res.data.rental }));
+      await fetchPaymentHistory(id);
+      setMessage(res.data.message || "Final settlement updated");
+    } catch (err) {
+      setMessage(err.response?.data?.message || "Failed to update final settlement");
+    }
+  };
+
+  const getPaymentState = (rental) => {
+    const payment = rental.payment || {};
+    const advance = payment.advance || {};
+    const final = payment.final || {};
+    const total = Number(rental.totalPrice || 0);
+    const fallbackAdvance = Math.round((total * 25) / 100);
+    const fallbackFinal = Math.max(total - fallbackAdvance, 0);
+    return {
+      advanceAmount: Number(payment.advanceAmount ?? fallbackAdvance),
+      finalAmount: Number(payment.finalAmount ?? fallbackFinal),
+      advanceStatus: advance.status || "pending",
+      advanceMethod: advance.method || "none",
+      finalStatus: final.status || "not_due",
+      finalMethod: final.method || "none"
+    };
+  };
+
+  const handleGatewayPayment = async (rentalId, stage) => {
+    try {
+      setMessage("");
+      const stageLabel = stage === "advance" ? "advance payment" : "final settlement";
+      const confirmed = window.confirm(`Proceed with ${stageLabel} via secured site checkout?`);
+      if (!confirmed) return;
+
+      const orderRes = await api.post(`/rentals/${rentalId}/payment-gateway/order`, { stage });
+      const order = orderRes.data?.order;
+      const prefill = orderRes.data?.prefill || {};
+      if (!order?.id || !order?.keyId) {
+        setMessage("Unable to start gateway checkout.");
+        return;
+      }
+
+      const sdkLoaded = await loadRazorpayScript();
+      if (!sdkLoaded || !window.Razorpay) {
+        setMessage("Payment SDK failed to load. Please retry.");
+        return;
+      }
+
+      const options = {
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency || "INR",
+        name: "Renzi",
+        description: stage === "advance" ? "Advance Payment (25%)" : "Final Settlement (75%)",
+        order_id: order.id,
+        prefill,
+        theme: { color: "#374151" },
+        handler: async (response) => {
+          try {
+            const verifyRes = await api.post(`/rentals/${rentalId}/payment-gateway/verify`, {
+              stage,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature
+            });
+
+            updateRentalInState(rentalId, (r) => ({ ...r, ...verifyRes.data.rental }));
+            await fetchPaymentHistory(rentalId);
+            setMessage(verifyRes.data.message || "Payment completed successfully.");
+          } catch (err) {
+            setMessage(err.response?.data?.message || "Payment verification failed");
+          }
+        },
+      };
+
+      const checkout = new window.Razorpay(options);
+      checkout.on("payment.failed", () => {
+        setMessage("Payment was not completed. Please try again.");
+      });
+      checkout.open();
+    } catch (err) {
+      setMessage(err.response?.data?.message || "Failed to initiate gateway payment");
+    }
+  };
+
+  const formatDateTime = (value) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleString();
+  };
+
+  const downloadReceipt = (receipt) => {
+    const fallbackId = String(receipt.paidAt || "receipt").replace(/[^a-zA-Z0-9]/g, "-");
+    const filename = `renzi-receipt-${receipt.stage}-${receipt._id || fallbackId}.json`;
+    const blob = new Blob([JSON.stringify(receipt, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const formatStageLabel = (status) => {
+    switch (status) {
+      case "paid":
+        return "Paid";
+      case "pending_confirmation":
+        return "Waiting owner confirmation";
+      case "not_due":
+        return "Not due yet";
+      default:
+        return "Pending";
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case "requested": return "#f59e0b";
@@ -165,7 +345,7 @@ function MyRentals() {
     <div style={styles.container}>
       <h1 style={styles.title}>My Rentals</h1>
       <p style={styles.subTitle}>
-        Click any rental card to open full details. Agreement opens only from inside rental details.
+        Click any rental card to open full details. Rental Terms and payments open from inside rental details.
       </p>
       {message && <p style={styles.message}>{message}</p>}
 
@@ -200,9 +380,22 @@ function MyRentals() {
 
             {rental.agreement && (
               <p style={styles.agreementMeta}>
-                Agreement: {rental.agreement.status} | Owner signed: {rental.agreement.ownerSigned ? "Yes" : "No"} | You signed: {rental.agreement.renterSigned ? "Yes" : "No"}
+                Rental Terms: {rental.agreement.status} | Owner signed: {rental.agreement.ownerSigned ? "Yes" : "No"} | You signed: {rental.agreement.renterSigned ? "Yes" : "No"}
               </p>
             )}
+            {(() => {
+              const payment = getPaymentState(rental);
+              return (
+                <div style={styles.paymentBox}>
+                  <p style={styles.paymentLine}>
+                    <strong>Advance:</strong> INR {payment.advanceAmount} ({formatStageLabel(payment.advanceStatus)})
+                  </p>
+                  <p style={styles.paymentLine}>
+                    <strong>Final:</strong> INR {payment.finalAmount} ({formatStageLabel(payment.finalStatus)})
+                  </p>
+                </div>
+              );
+            })()}
             <p style={styles.cardHint}>Click card to view details and actions</p>
           </div>
         ))}
@@ -235,26 +428,131 @@ function MyRentals() {
 
                 {selectedRental.agreement ? (
                   <p style={styles.agreementMeta}>
-                    Agreement: {selectedRental.agreement.status} | Owner signed: {selectedRental.agreement.ownerSigned ? "Yes" : "No"} | You signed: {selectedRental.agreement.renterSigned ? "Yes" : "No"}
+                    Rental Terms: {selectedRental.agreement.status} | Owner signed: {selectedRental.agreement.ownerSigned ? "Yes" : "No"} | You signed: {selectedRental.agreement.renterSigned ? "Yes" : "No"}
                   </p>
                 ) : null}
+
+                {(() => {
+                  const payment = getPaymentState(selectedRental);
+                  const fallbackReceipts = selectedRental.payment?.receipts || [];
+                  const fallbackTimeline = selectedRental.payment?.timeline || [];
+                  const receipts = paymentHistory.receipts.length > 0 ? paymentHistory.receipts : fallbackReceipts;
+                  const timeline = paymentHistory.timeline.length > 0 ? paymentHistory.timeline : fallbackTimeline;
+                  return (
+                    <>
+                      <div style={styles.paymentBoxLarge}>
+                        <p style={styles.paymentTitle}>Payment Summary</p>
+                        <p style={styles.paymentLine}>
+                          <strong>Advance Payment (25%):</strong> INR {payment.advanceAmount}
+                        </p>
+                        <p style={styles.paymentLine}>
+                          Status: {formatStageLabel(payment.advanceStatus)} | Method: {payment.advanceMethod}
+                        </p>
+                        <p style={styles.paymentLine}>
+                          <strong>Final Settlement (75%):</strong> INR {payment.finalAmount}
+                        </p>
+                        <p style={styles.paymentLine}>
+                          Status: {formatStageLabel(payment.finalStatus)} | Method: {payment.finalMethod}
+                        </p>
+                      </div>
+
+                      <div style={styles.timelineBox}>
+                        <p style={styles.paymentTitle}>Receipts</p>
+                        {paymentHistoryLoading ? (
+                          <p style={styles.paymentLine}>Loading payment history...</p>
+                        ) : receipts.length === 0 ? (
+                          <p style={styles.paymentLine}>No receipts yet.</p>
+                        ) : (
+                          <div style={styles.timelineList}>
+                            {receipts.map((receipt) => (
+                              <div key={receipt._id || `${receipt.stage}-${receipt.paidAt}`} style={styles.timelineItem}>
+                                <p style={styles.paymentLine}><strong>{receipt.stage === "advance" ? "Advance" : "Final"}</strong> • INR {receipt.amount}</p>
+                                <p style={styles.paymentLine}>Method: {receipt.method} • Status: {receipt.status}</p>
+                                <p style={styles.paymentLine}>Paid At: {formatDateTime(receipt.paidAt)}</p>
+                                <button style={styles.buttonOutline} onClick={() => downloadReceipt(receipt)}>
+                                  Download Receipt JSON
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <p style={{ ...styles.paymentTitle, marginTop: 12 }}>Transaction Timeline</p>
+                        {timeline.length === 0 ? (
+                          <p style={styles.paymentLine}>No payment events yet.</p>
+                        ) : (
+                          <div style={styles.timelineList}>
+                            {timeline.map((event) => (
+                              <div key={event._id || `${event.event}-${event.createdAt}`} style={styles.timelineItem}>
+                                <p style={styles.paymentLine}><strong>{event.event}</strong></p>
+                                <p style={styles.paymentLine}>
+                                  Stage: {event.stage || "-"} • Method: {event.method || "-"} • Amount: INR {Number(event.amount || 0)}
+                                </p>
+                                <p style={styles.paymentLine}>Time: {formatDateTime(event.createdAt)}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
 
                 <div style={styles.actions}>
                   {selectedRental.agreement && (
                     <button style={styles.buttonOutline} onClick={() => openAgreementModal(selectedRental._id, "view")}>
-                      Open Agreement
+                      Open Rental Terms
                     </button>
                   )}
 
                   {selectedRental.status === "approved" && selectedRental.agreement && !selectedRental.agreement.renterSigned && (
                     <button style={styles.buttonMuted} onClick={() => openAgreementModal(selectedRental._id, "sign-renter")}>
-                      Sign Agreement (2-step)
+                      Sign Rental Terms (2-step)
                     </button>
                   )}
+
+                  {(() => {
+                    const payment = getPaymentState(selectedRental);
+                    if (selectedRental.status !== "approved" || payment.advanceStatus !== "pending") return null;
+
+                    return (
+                      <>
+                        <button style={styles.buttonPrimary} onClick={() => handleGatewayPayment(selectedRental._id, "advance")}>
+                          Pay Advance via Site
+                        </button>
+                        <button style={styles.buttonMuted} onClick={() => payAdvance(selectedRental._id, "cash")}>
+                          Mark Advance as Cash
+                        </button>
+                      </>
+                    );
+                  })()}
+
+                  {(() => {
+                    const payment = getPaymentState(selectedRental);
+                    if (!["active", "returned"].includes(selectedRental.status)) return null;
+                    if (!["pending", "not_due"].includes(payment.finalStatus)) return null;
+
+                    return (
+                      <>
+                        <button style={styles.buttonPrimary} onClick={() => handleGatewayPayment(selectedRental._id, "final")}>
+                          Pay Final via Site
+                        </button>
+                        <button style={styles.buttonMuted} onClick={() => payFinalSettlement(selectedRental._id, "cash")}>
+                          Mark Final as Cash
+                        </button>
+                      </>
+                    );
+                  })()}
 
                   {selectedRental.status === "active" && (
                     <button style={styles.buttonPrimary} onClick={() => returnItem(selectedRental._id)}>
                       Return Item
+                    </button>
+                  )}
+
+                  {selectedRental.status === "active" && (
+                    <button style={styles.buttonDanger} onClick={() => openReportForm(selectedRental._id)}>
+                      Issue Report
                     </button>
                   )}
 
@@ -412,6 +710,51 @@ const styles = {
     borderRadius: 8,
     border: "1px solid #bfdbfe",
   },
+  paymentBox: {
+    marginTop: 10,
+    padding: "10px 12px",
+    borderRadius: 8,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  paymentBoxLarge: {
+    marginTop: 2,
+    padding: "10px 12px",
+    borderRadius: 10,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+  },
+  paymentTitle: {
+    margin: "0 0 6px",
+    color: "#0f172a",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  paymentLine: {
+    margin: "4px 0",
+    color: "#334155",
+    fontSize: 13,
+  },
+  timelineBox: {
+    marginTop: 10,
+    padding: "10px 12px",
+    borderRadius: 10,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+  },
+  timelineList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    maxHeight: 220,
+    overflowY: "auto",
+  },
+  timelineItem: {
+    padding: "8px 10px",
+    borderRadius: 8,
+    border: "1px solid #e5e7eb",
+    background: "#f8fafc",
+  },
   bookingMetaBox: {
     marginTop: 10,
     padding: 10,
@@ -488,6 +831,7 @@ const styles = {
     boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
     display: "flex",
     flexDirection: "column",
+    overflow: "hidden",
   },
   detailsHeader: {
     display: "flex",
@@ -520,6 +864,8 @@ const styles = {
     flex: 1,
     display: "flex",
     flexDirection: "column",
+    minHeight: 0,
+    overflowY: "auto",
   },
   detailsLeft: {
     display: "flex",

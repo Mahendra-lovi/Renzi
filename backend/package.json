@@ -5,7 +5,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "backend": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "backfill:payments": "node scripts/backfill-payments.js",
+    "backfill:payments:apply": "node scripts/backfill-payments.js --apply"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +23,7 @@
     "mongoose": "^9.0.2",
     "nodemailer": "^8.0.5",
     "pdfkit": "^0.17.2",
+    "razorpay": "^2.9.6",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {

@@ -5,10 +5,19 @@ const Agreement = require("../models/Agreement");
 const CaseFile = require("../models/CaseFile");
 const Conversation = require("../models/Conversation");
 const PDFDocument = require("pdfkit");
+const crypto = require("crypto");
+
+let Razorpay = null;
+try {
+  Razorpay = require("razorpay");
+} catch {
+  Razorpay = null;
+}
 
 const TRUST_MIN = 0;
 const TRUST_MAX = 100;
 const MAX_CHAT_MESSAGES = 200;
+const ADVANCE_PAYMENT_RATIO = 0.25;
 
 const clampTrust = (value) => Math.max(TRUST_MIN, Math.min(TRUST_MAX, value));
 
@@ -19,16 +28,181 @@ const updateTrustScore = async (userId, delta) => {
   await user.save();
 };
 
+const roundCurrency = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+
+const calculatePaymentBreakdown = (totalPrice) => {
+  const safeTotal = roundCurrency(Number(totalPrice) || 0);
+  const advanceAmount = roundCurrency(safeTotal * ADVANCE_PAYMENT_RATIO);
+  const finalAmount = roundCurrency(safeTotal - advanceAmount);
+  return { advanceAmount, finalAmount };
+};
+
+const ensurePaymentState = (rental) => {
+  if (!rental.payment) {
+    rental.payment = {};
+  }
+
+  const { advanceAmount, finalAmount } = calculatePaymentBreakdown(rental.totalPrice);
+
+  if (typeof rental.payment.advanceAmount !== "number") {
+    rental.payment.advanceAmount = advanceAmount;
+  }
+  if (typeof rental.payment.finalAmount !== "number") {
+    rental.payment.finalAmount = finalAmount;
+  }
+
+  if (!rental.payment.advance) {
+    rental.payment.advance = {
+      status: "pending",
+      method: "none",
+      transactionRef: "",
+      paidAt: null,
+      confirmedAt: null,
+      confirmedBy: null,
+      gatewayOrderId: "",
+      gatewayPaymentId: "",
+      gatewaySignature: ""
+    };
+  }
+
+  if (!rental.payment.final) {
+    rental.payment.final = {
+      status: "not_due",
+      method: "none",
+      transactionRef: "",
+      paidAt: null,
+      confirmedAt: null,
+      confirmedBy: null,
+      gatewayOrderId: "",
+      gatewayPaymentId: "",
+      gatewaySignature: ""
+    };
+  }
+
+  if (!rental.payment.advance.status) rental.payment.advance.status = "pending";
+  if (!rental.payment.advance.method) rental.payment.advance.method = "none";
+  if (!rental.payment.advance.transactionRef) rental.payment.advance.transactionRef = "";
+  if (!rental.payment.advance.gatewayOrderId) rental.payment.advance.gatewayOrderId = "";
+  if (!rental.payment.advance.gatewayPaymentId) rental.payment.advance.gatewayPaymentId = "";
+  if (!rental.payment.advance.gatewaySignature) rental.payment.advance.gatewaySignature = "";
+  if (!rental.payment.final.status) rental.payment.final.status = "not_due";
+  if (!rental.payment.final.method) rental.payment.final.method = "none";
+  if (!rental.payment.final.transactionRef) rental.payment.final.transactionRef = "";
+  if (!rental.payment.final.gatewayOrderId) rental.payment.final.gatewayOrderId = "";
+  if (!rental.payment.final.gatewayPaymentId) rental.payment.final.gatewayPaymentId = "";
+  if (!rental.payment.final.gatewaySignature) rental.payment.final.gatewaySignature = "";
+
+  if (!Array.isArray(rental.payment.receipts)) rental.payment.receipts = [];
+  if (!Array.isArray(rental.payment.timeline)) rental.payment.timeline = [];
+};
+
+const isCashMethod = (method) => method === "cash";
+
+const isRazorpayEnabled = () => Boolean(
+  Razorpay &&
+  process.env.RAZORPAY_KEY_ID &&
+  process.env.RAZORPAY_KEY_SECRET
+);
+
+const getRazorpayClient = () => {
+  if (!isRazorpayEnabled()) {
+    throw new Error("Razorpay is not configured");
+  }
+
+  return new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET
+  });
+};
+
+const appendPaymentTimeline = (rental, {
+  stage = null,
+  event,
+  method = "none",
+  amount = 0,
+  note = "",
+  actor = null
+}) => {
+  ensurePaymentState(rental);
+  rental.payment.timeline.push({
+    stage,
+    event,
+    method,
+    amount,
+    note,
+    actor,
+    createdAt: new Date()
+  });
+};
+
+const appendPaymentReceipt = (rental, {
+  stage,
+  method,
+  amount,
+  status,
+  transactionRef,
+  gatewayOrderId = "",
+  gatewayPaymentId = "",
+  paidAt,
+  confirmedAt,
+  confirmedBy
+}) => {
+  ensurePaymentState(rental);
+  rental.payment.receipts.push({
+    stage,
+    method,
+    amount,
+    status,
+    transactionRef,
+    gatewayOrderId,
+    gatewayPaymentId,
+    paidAt,
+    confirmedAt,
+    confirmedBy
+  });
+};
+
+const getStageAmount = (rental, stage) => {
+  ensurePaymentState(rental);
+  return stage === "advance" ? rental.payment.advanceAmount : rental.payment.finalAmount;
+};
+
+const canProceedForStage = (rental, stage) => {
+  if (stage === "advance") {
+    if (!["approved", "active"].includes(rental.status)) {
+      return "Advance can be paid only after approval";
+    }
+    if (rental.payment.advance.status === "paid") {
+      return "Advance payment already completed";
+    }
+    return null;
+  }
+
+  if (!["active", "returned"].includes(rental.status)) {
+    return "Final settlement is available after rental starts";
+  }
+  if (rental.payment.advance.status !== "paid") {
+    return "Complete advance payment first";
+  }
+  if (rental.payment.final.status === "paid") {
+    return "Final settlement already completed";
+  }
+  return null;
+};
+
 const buildAgreementContent = ({ rental, item, owner, renter }) => {
   const start = new Date(rental.startDate).toDateString();
   const end = new Date(rental.endDate).toDateString();
+  const payment = calculatePaymentBreakdown(rental.totalPrice);
 
   return [
-    `Rental Agreement for ${item.title}`,
+    `Rental Terms for ${item.title}`,
     `Owner: ${owner.email}`,
     `Renter: ${renter.email}`,
     `Rental period: ${start} to ${end}`,
     `Total price: INR ${rental.totalPrice}`,
+    `Advance payment (25%): INR ${payment.advanceAmount}`,
+    `Final settlement (75%): INR ${payment.finalAmount}`,
     "Both parties agree to return the item in expected condition and follow marketplace rules."
   ].join("\n");
 };
@@ -293,6 +467,7 @@ exports.requestRental = async (req, res) => {
 
     // 5️⃣ calculate total price 🔐
     const totalPrice = totalDays * item.pricePerDay;
+    const payment = calculatePaymentBreakdown(totalPrice);
 
     // 6️⃣ create rental
     const rental = await Rental.create({
@@ -308,7 +483,19 @@ exports.requestRental = async (req, res) => {
         : "pickup",
       notes: String(notes || "").trim(),
       signatureName: String(signatureName || "").trim(),
-      agreementAcceptedAt: agreementAccepted ? new Date() : null
+      agreementAcceptedAt: agreementAccepted ? new Date() : null,
+      payment: {
+        advanceAmount: payment.advanceAmount,
+        finalAmount: payment.finalAmount,
+        advance: {
+          status: "pending",
+          method: "none"
+        },
+        final: {
+          status: "not_due",
+          method: "none"
+        }
+      }
     });
 
     await Conversation.findOneAndUpdate(
@@ -419,6 +606,13 @@ exports.activateRental = async (req, res) => {
       });
     }
 
+    ensurePaymentState(rental);
+    if (rental.payment.advance.status !== "paid") {
+      return res.status(403).json({
+        message: "Advance payment is required before activation"
+      });
+    }
+
     rental.status = "active";
     await rental.save();
 
@@ -459,6 +653,11 @@ exports.returnRental = async (req, res) => {
       });
     }
 
+    ensurePaymentState(rental);
+    if (rental.payment.final.status === "not_due") {
+      rental.payment.final.status = "pending";
+    }
+
     rental.status = "returned";
     await rental.save();
 
@@ -479,6 +678,440 @@ exports.returnRental = async (req, res) => {
       agreement
     });
 
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.payAdvance = async (req, res) => {
+  try {
+    const rental = await Rental.findById(req.params.id);
+    if (!rental) {
+      return res.status(404).json({ message: "Rental not found" });
+    }
+
+    if (rental.renter.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Only renter can pay advance" });
+    }
+
+    ensurePaymentState(rental);
+    const advanceError = canProceedForStage(rental, "advance");
+    if (advanceError) {
+      return res.status(400).json({ message: advanceError });
+    }
+
+    const method = String(req.body?.method || "site").toLowerCase();
+    if (!["site", "cash"].includes(method)) {
+      return res.status(400).json({ message: "Invalid payment method" });
+    }
+
+    if (method === "site") {
+      return res.status(400).json({
+        message: "Use gateway order endpoint for site payment"
+      });
+    }
+
+    const transactionRef = String(req.body?.transactionRef || "").trim();
+    rental.payment.advance.method = method;
+    rental.payment.advance.transactionRef = transactionRef;
+    rental.payment.advance.paidAt = new Date();
+    rental.payment.advance.gatewayOrderId = "";
+    rental.payment.advance.gatewayPaymentId = "";
+    rental.payment.advance.gatewaySignature = "";
+
+    rental.payment.advance.status = "pending_confirmation";
+    rental.payment.advance.confirmedAt = null;
+    rental.payment.advance.confirmedBy = null;
+
+    appendPaymentTimeline(rental, {
+      stage: "advance",
+      event: "cash_marked_pending_confirmation",
+      method: "cash",
+      amount: rental.payment.advanceAmount,
+      note: transactionRef ? `Ref: ${transactionRef}` : "Awaiting owner confirmation",
+      actor: req.user.id
+    });
+
+    await rental.save();
+
+    res.json({
+      message: "Advance cash payment marked. Waiting for owner confirmation.",
+      rental
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.createGatewayOrder = async (req, res) => {
+  try {
+    if (!isRazorpayEnabled()) {
+      return res.status(503).json({
+        message: "Razorpay is not configured on the server"
+      });
+    }
+
+    const rental = await Rental.findById(req.params.id);
+    if (!rental) {
+      return res.status(404).json({ message: "Rental not found" });
+    }
+
+    if (rental.renter.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Only renter can initiate payment" });
+    }
+
+    const stage = String(req.body?.stage || "").toLowerCase();
+    if (!["advance", "final"].includes(stage)) {
+      return res.status(400).json({ message: "Invalid payment stage" });
+    }
+
+    ensurePaymentState(rental);
+    const stageError = canProceedForStage(rental, stage);
+    if (stageError) {
+      return res.status(400).json({ message: stageError });
+    }
+
+    const amount = getStageAmount(rental, stage);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ message: "Invalid payable amount" });
+    }
+
+    const razorpay = getRazorpayClient();
+    const order = await razorpay.orders.create({
+      amount: Math.round(amount * 100),
+      currency: "INR",
+      receipt: `renzi_${String(rental._id)}_${stage}_${Date.now()}`,
+      notes: {
+        rentalId: String(rental._id),
+        stage
+      }
+    });
+
+    const stageData = stage === "advance" ? rental.payment.advance : rental.payment.final;
+    stageData.method = "site";
+    stageData.status = "pending";
+    stageData.transactionRef = String(order.id);
+    stageData.gatewayOrderId = String(order.id);
+    stageData.gatewayPaymentId = "";
+    stageData.gatewaySignature = "";
+
+    appendPaymentTimeline(rental, {
+      stage,
+      event: "gateway_order_created",
+      method: "site",
+      amount,
+      note: `Order ID: ${order.id}`,
+      actor: req.user.id
+    });
+
+    await rental.save();
+
+    const renter = await User.findById(req.user.id).select("name email phone").lean();
+
+    res.json({
+      message: "Gateway order created",
+      order: {
+        id: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        stage,
+        keyId: process.env.RAZORPAY_KEY_ID,
+        rentalId: String(rental._id)
+      },
+      prefill: {
+        name: renter?.name || "",
+        email: renter?.email || "",
+        contact: renter?.phone || ""
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.verifyGatewayPayment = async (req, res) => {
+  try {
+    const rental = await Rental.findById(req.params.id);
+    if (!rental) {
+      return res.status(404).json({ message: "Rental not found" });
+    }
+
+    if (rental.renter.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Only renter can verify payment" });
+    }
+
+    const stage = String(req.body?.stage || "").toLowerCase();
+    if (!["advance", "final"].includes(stage)) {
+      return res.status(400).json({ message: "Invalid payment stage" });
+    }
+
+    const orderId = String(req.body?.razorpay_order_id || req.body?.orderId || "").trim();
+    const paymentId = String(req.body?.razorpay_payment_id || req.body?.paymentId || "").trim();
+    const signature = String(req.body?.razorpay_signature || req.body?.signature || "").trim();
+
+    if (!orderId || !paymentId || !signature) {
+      return res.status(400).json({ message: "Missing gateway verification data" });
+    }
+
+    if (!isRazorpayEnabled()) {
+      return res.status(503).json({ message: "Razorpay is not configured on the server" });
+    }
+
+    ensurePaymentState(rental);
+    const stageError = canProceedForStage(rental, stage);
+    if (stageError && !stageError.includes("already completed")) {
+      return res.status(400).json({ message: stageError });
+    }
+
+    const stageData = stage === "advance" ? rental.payment.advance : rental.payment.final;
+    if (stageData.status === "paid") {
+      return res.status(400).json({ message: `${stage} payment already completed` });
+    }
+
+    if (!stageData.gatewayOrderId || stageData.gatewayOrderId !== orderId) {
+      return res.status(400).json({ message: "Gateway order mismatch" });
+    }
+
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${orderId}|${paymentId}`)
+      .digest("hex");
+
+    if (expectedSignature !== signature) {
+      return res.status(400).json({ message: "Gateway signature verification failed" });
+    }
+
+    const paidAt = new Date();
+    stageData.status = "paid";
+    stageData.method = "site";
+    stageData.transactionRef = paymentId;
+    stageData.gatewayPaymentId = paymentId;
+    stageData.gatewaySignature = signature;
+    stageData.paidAt = paidAt;
+    stageData.confirmedAt = paidAt;
+    stageData.confirmedBy = req.user.id;
+
+    appendPaymentReceipt(rental, {
+      stage,
+      method: "site",
+      amount: getStageAmount(rental, stage),
+      status: "paid",
+      transactionRef: paymentId,
+      gatewayOrderId: orderId,
+      gatewayPaymentId: paymentId,
+      paidAt,
+      confirmedAt: paidAt,
+      confirmedBy: req.user.id
+    });
+
+    appendPaymentTimeline(rental, {
+      stage,
+      event: "gateway_payment_verified",
+      method: "site",
+      amount: getStageAmount(rental, stage),
+      note: `Payment ID: ${paymentId}`,
+      actor: req.user.id
+    });
+
+    await rental.save();
+
+    res.json({ message: `${stage === "advance" ? "Advance" : "Final"} payment completed.`, rental });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.confirmAdvanceCash = async (req, res) => {
+  try {
+    const rental = await Rental.findById(req.params.id);
+    if (!rental) {
+      return res.status(404).json({ message: "Rental not found" });
+    }
+
+    if (rental.owner.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Only owner can confirm cash payment" });
+    }
+
+    ensurePaymentState(rental);
+    if (rental.payment.advance.method !== "cash") {
+      return res.status(400).json({ message: "Advance cash payment not found" });
+    }
+
+    if (rental.payment.advance.status !== "pending_confirmation") {
+      return res.status(400).json({ message: "Advance payment is not awaiting confirmation" });
+    }
+
+    rental.payment.advance.status = "paid";
+    rental.payment.advance.confirmedAt = new Date();
+    rental.payment.advance.confirmedBy = req.user.id;
+
+    appendPaymentReceipt(rental, {
+      stage: "advance",
+      method: "cash",
+      amount: rental.payment.advanceAmount,
+      status: "paid",
+      transactionRef: rental.payment.advance.transactionRef || "",
+      paidAt: rental.payment.advance.paidAt || new Date(),
+      confirmedAt: rental.payment.advance.confirmedAt,
+      confirmedBy: req.user.id
+    });
+
+    appendPaymentTimeline(rental, {
+      stage: "advance",
+      event: "cash_confirmed",
+      method: "cash",
+      amount: rental.payment.advanceAmount,
+      note: "Owner confirmed advance cash",
+      actor: req.user.id
+    });
+
+    await rental.save();
+
+    res.json({ message: "Advance cash payment confirmed", rental });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.payFinalSettlement = async (req, res) => {
+  try {
+    const rental = await Rental.findById(req.params.id);
+    if (!rental) {
+      return res.status(404).json({ message: "Rental not found" });
+    }
+
+    if (rental.renter.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Only renter can settle final payment" });
+    }
+
+    if (!["active", "returned"].includes(rental.status)) {
+      return res.status(400).json({ message: "Final settlement is available after rental starts" });
+    }
+
+    ensurePaymentState(rental);
+    const finalError = canProceedForStage(rental, "final");
+    if (finalError) {
+      return res.status(400).json({ message: finalError });
+    }
+
+    const method = String(req.body?.method || "site").toLowerCase();
+    if (!["site", "cash"].includes(method)) {
+      return res.status(400).json({ message: "Invalid payment method" });
+    }
+
+    if (method === "site") {
+      return res.status(400).json({
+        message: "Use gateway order endpoint for site payment"
+      });
+    }
+
+    const transactionRef = String(req.body?.transactionRef || "").trim();
+    rental.payment.final.method = method;
+    rental.payment.final.transactionRef = transactionRef;
+    rental.payment.final.paidAt = new Date();
+    rental.payment.final.gatewayOrderId = "";
+    rental.payment.final.gatewayPaymentId = "";
+    rental.payment.final.gatewaySignature = "";
+
+    rental.payment.final.status = "pending_confirmation";
+    rental.payment.final.confirmedAt = null;
+    rental.payment.final.confirmedBy = null;
+
+    appendPaymentTimeline(rental, {
+      stage: "final",
+      event: "cash_marked_pending_confirmation",
+      method: "cash",
+      amount: rental.payment.finalAmount,
+      note: transactionRef ? `Ref: ${transactionRef}` : "Awaiting owner confirmation",
+      actor: req.user.id
+    });
+
+    await rental.save();
+
+    res.json({
+      message: "Final cash settlement marked. Waiting for owner confirmation.",
+      rental
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.confirmFinalCash = async (req, res) => {
+  try {
+    const rental = await Rental.findById(req.params.id);
+    if (!rental) {
+      return res.status(404).json({ message: "Rental not found" });
+    }
+
+    if (rental.owner.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Only owner can confirm cash payment" });
+    }
+
+    ensurePaymentState(rental);
+    if (rental.payment.final.method !== "cash") {
+      return res.status(400).json({ message: "Final cash settlement not found" });
+    }
+
+    if (rental.payment.final.status !== "pending_confirmation") {
+      return res.status(400).json({ message: "Final settlement is not awaiting confirmation" });
+    }
+
+    rental.payment.final.status = "paid";
+    rental.payment.final.confirmedAt = new Date();
+    rental.payment.final.confirmedBy = req.user.id;
+
+    appendPaymentReceipt(rental, {
+      stage: "final",
+      method: "cash",
+      amount: rental.payment.finalAmount,
+      status: "paid",
+      transactionRef: rental.payment.final.transactionRef || "",
+      paidAt: rental.payment.final.paidAt || new Date(),
+      confirmedAt: rental.payment.final.confirmedAt,
+      confirmedBy: req.user.id
+    });
+
+    appendPaymentTimeline(rental, {
+      stage: "final",
+      event: "cash_confirmed",
+      method: "cash",
+      amount: rental.payment.finalAmount,
+      note: "Owner confirmed final cash",
+      actor: req.user.id
+    });
+
+    await rental.save();
+
+    res.json({ message: "Final cash settlement confirmed", rental });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getPaymentHistory = async (req, res) => {
+  try {
+    const rental = await Rental.findById(req.params.id);
+    if (!rental) {
+      return res.status(404).json({ message: "Rental not found" });
+    }
+
+    if (
+      rental.owner.toString() !== req.user.id &&
+      rental.renter.toString() !== req.user.id
+    ) {
+      return res.status(403).json({ message: "Not allowed to view payment history" });
+    }
+
+    ensurePaymentState(rental);
+
+    const receipts = [...(rental.payment.receipts || [])]
+      .sort((a, b) => new Date(b.paidAt || 0) - new Date(a.paidAt || 0));
+
+    const timeline = [...(rental.payment.timeline || [])]
+      .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+
+    res.json({ receipts, timeline });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -543,14 +1176,14 @@ exports.getRentalAgreementPdf = async (req, res) => {
     const itemTitle = agreement.item?.title || "Rental Item";
     const generatedAt = new Date();
 
-    const filename = `Renzi-Agreement-${String(rental._id)}.pdf`;
+    const filename = `Renzi-Rental-Terms-${String(rental._id)}.pdf`;
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename=\"${filename}\"`);
 
     const doc = new PDFDocument({ margin: 50 });
     doc.pipe(res);
 
-    doc.fontSize(20).text("RENZI RENTAL AGREEMENT", { align: "center" });
+    doc.fontSize(20).text("RENZI RENTAL TERMS", { align: "center" });
     doc.moveDown(0.5);
     doc.fontSize(10).fillColor("#666").text(`Document ID: ${agreement._id}`, { align: "center" });
     doc.text(`Generated: ${generatedAt.toISOString()}`, { align: "center" });
@@ -564,6 +1197,9 @@ exports.getRentalAgreementPdf = async (req, res) => {
     doc.text(`Agreement Status: ${agreement.status}`);
     doc.text(`Rental Period: ${new Date(agreement.startDate).toDateString()} to ${new Date(agreement.endDate).toDateString()}`);
     doc.text(`Total Price: INR ${agreement.totalPrice}`);
+    const payment = calculatePaymentBreakdown(agreement.totalPrice);
+    doc.text(`Advance Payment (25%): INR ${payment.advanceAmount}`);
+    doc.text(`Final Settlement (75%): INR ${payment.finalAmount}`);
     doc.moveDown();
 
     doc.fontSize(12).text("Parties", { underline: true });

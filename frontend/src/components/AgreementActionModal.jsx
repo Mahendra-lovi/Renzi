@@ -3,9 +3,9 @@ import api from "../services/api";
 
 const actionCopy = {
   view: {
-    title: "Agreement details",
+    title: "Rental Terms details",
     buttonLabel: "Close",
-    heading: "Read the full agreement",
+    heading: "Read the full rental terms",
     description:
       "Review all terms, signatures, and timeline details. You can also download the legal PDF copy for records."
   },
@@ -28,7 +28,7 @@ const actionCopy = {
     buttonLabel: "Confirm activation",
     heading: "What this action will do",
     description:
-      "This will move the rental to ACTIVE status. Both parties must already have signed the agreement before this action succeeds."
+      "This will move the rental to ACTIVE status. Both parties must sign the Rental Terms and advance payment must be completed first."
   }
 };
 
@@ -60,7 +60,7 @@ function AgreementActionModal({
       } catch (err) {
         if (!mounted) return;
         setAgreement(null);
-        setError(err.response?.data?.message || "Failed to load agreement");
+        setError(err.response?.data?.message || "Failed to load rental terms");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -85,13 +85,13 @@ function AgreementActionModal({
       const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = `Renzi-Agreement-${rentalId}.pdf`;
+      link.download = `Renzi-Rental-Terms-${rentalId}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to download agreement PDF");
+      setError(err.response?.data?.message || "Failed to download rental terms PDF");
     }
   };
 
@@ -107,7 +107,7 @@ function AgreementActionModal({
       <div style={styles.modal}>
         <h2 style={styles.title}>{copy.title}</h2>
 
-        {loading ? <p style={styles.meta}>Loading agreement...</p> : null}
+        {loading ? <p style={styles.meta}>Loading rental terms...</p> : null}
         {error ? <p style={styles.error}>{error}</p> : null}
 
         {agreement ? (
@@ -147,7 +147,7 @@ function AgreementActionModal({
               </div>
 
               <div style={styles.termsBox}>
-                <strong style={styles.termsTitle}>Agreement text</strong>
+                <strong style={styles.termsTitle}>Rental terms text</strong>
                 <p style={styles.termsText}>{agreement.content}</p>
               </div>
 
@@ -160,7 +160,7 @@ function AgreementActionModal({
                   <div style={styles.stepBox}>
                     <h3 style={styles.stepTitle}>Step 1: Opened successfully</h3>
                     <p style={styles.stepText}>
-                      The agreement is now open. Click Continue to view what the next action will do before final confirmation.
+                      The Rental Terms are now open. Click Continue to view what the next action will do before final confirmation.
                     </p>
                     <div style={styles.actions}>
                       <button type="button" style={styles.cancelBtn} onClick={onClose}>Close</button>

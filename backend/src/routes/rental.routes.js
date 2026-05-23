@@ -15,6 +15,13 @@ const {
   sendRentalChatMessage,
   signOwnerAgreement,
   signRenterAgreement,
+  payAdvance,
+  createGatewayOrder,
+  verifyGatewayPayment,
+  confirmAdvanceCash,
+  payFinalSettlement,
+  confirmFinalCash,
+  getPaymentHistory,
   cancelRental,
   disputeRental,
   reportIssue
@@ -27,6 +34,13 @@ router.post("/request", auth, requestRental);
 router.patch("/approve/:id", auth, approveRental);
 router.patch("/activate/:id", auth, activateRental);
 router.patch("/return/:id", auth, returnRental);
+router.patch("/:id/pay-advance", auth, payAdvance);
+router.post("/:id/payment-gateway/order", auth, createGatewayOrder);
+router.post("/:id/payment-gateway/verify", auth, verifyGatewayPayment);
+router.patch("/:id/confirm-advance-cash", auth, confirmAdvanceCash);
+router.patch("/:id/pay-final", auth, payFinalSettlement);
+router.patch("/:id/confirm-final-cash", auth, confirmFinalCash);
+router.get("/:id/payment-history", auth, getPaymentHistory);
 router.patch("/cancel/:id", auth, cancelRental);
 router.patch("/dispute/:id", auth, disputeRental);
 router.patch("/report-issue/:id", auth, reportIssue);

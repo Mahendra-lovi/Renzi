@@ -21,6 +21,147 @@ const rentalChatMessageSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const paymentStageSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ["pending", "pending_confirmation", "paid", "not_due"],
+      default: "pending"
+    },
+    method: {
+      type: String,
+      enum: ["none", "site", "cash"],
+      default: "none"
+    },
+    transactionRef: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    paidAt: {
+      type: Date,
+      default: null
+    },
+    confirmedAt: {
+      type: Date,
+      default: null
+    },
+    confirmedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    },
+    gatewayOrderId: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    gatewayPaymentId: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    gatewaySignature: {
+      type: String,
+      trim: true,
+      default: ""
+    }
+  },
+  { _id: false }
+);
+
+const paymentReceiptSchema = new mongoose.Schema(
+  {
+    stage: {
+      type: String,
+      enum: ["advance", "final"],
+      required: true
+    },
+    amount: {
+      type: Number,
+      required: true
+    },
+    method: {
+      type: String,
+      enum: ["site", "cash"],
+      required: true
+    },
+    status: {
+      type: String,
+      enum: ["paid", "pending_confirmation"],
+      required: true
+    },
+    transactionRef: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    gatewayOrderId: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    gatewayPaymentId: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    paidAt: {
+      type: Date,
+      default: Date.now
+    },
+    confirmedAt: {
+      type: Date,
+      default: null
+    },
+    confirmedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    }
+  },
+  { _id: true }
+);
+
+const paymentTimelineSchema = new mongoose.Schema(
+  {
+    stage: {
+      type: String,
+      enum: ["advance", "final"],
+      default: null
+    },
+    event: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    method: {
+      type: String,
+      enum: ["none", "site", "cash"],
+      default: "none"
+    },
+    amount: {
+      type: Number,
+      default: 0
+    },
+    note: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    actor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    }
+  },
+  { _id: true }
+);
+
 const rentalSchema = new mongoose.Schema(
   {
     item: {
@@ -54,6 +195,33 @@ const rentalSchema = new mongoose.Schema(
     totalPrice: {
       type: Number,
       required: true
+    },
+
+    payment: {
+      advanceAmount: {
+        type: Number,
+        default: 0
+      },
+      finalAmount: {
+        type: Number,
+        default: 0
+      },
+      advance: {
+        type: paymentStageSchema,
+        default: () => ({ status: "pending", method: "none" })
+      },
+      final: {
+        type: paymentStageSchema,
+        default: () => ({ status: "not_due", method: "none" })
+      },
+      receipts: {
+        type: [paymentReceiptSchema],
+        default: []
+      },
+      timeline: {
+        type: [paymentTimelineSchema],
+        default: []
+      }
     },
 
     purpose: {
